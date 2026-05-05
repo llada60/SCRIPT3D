@@ -60,8 +60,17 @@ def get_agent() -> Optional[BlenderAgent]:
         return globals.agents[session_id]
 
 
+def _set_blender_agent_status(agent, state: str, message: str):
+    if agent and getattr(agent, "blender_client", None) is not None:
+        try:
+            agent.blender_client.set_agent_status(state=state, message=message)
+        except Exception as exc:
+            logger.debug("同步 Blender Agent 状态失败: %s", exc)
+
+
 def _format_user_chat_content(input_value):
     """Use plain text for text-only messages so the chatbot renders them reliably."""
+    input_value = input_value or {}
     text = input_value.get("text", "")
     files = input_value.get("files") or []
     if not files:
@@ -106,13 +115,14 @@ def submit(input_value, chatbot_value):
     
     try:
         # 构建用户消息格式
-        user_message = input_value["text"]
+        user_message = (input_value or {}).get("text", "")
         
         # 如果有文件，添加到用户消息
-        if input_value["files"]:
+        input_files = (input_value or {}).get("files") or []
+        if input_files:
             user_message = [
-                {"type": "text", "text": input_value["text"]},
-                *[{"type": "image_url", "image_url": {"url": file}} for file in input_value["files"]]
+                {"type": "text", "text": user_message},
+                *[{"type": "image_url", "image_url": {"url": file}} for file in input_files]
             ]
         
         # 自动生成的最大轮数
@@ -169,7 +179,7 @@ def submit(input_value, chatbot_value):
                     first_output = False
                 
                 # 更新UI
-                if response_content:
+                if content_chunk or function_call or function_result:
                     yield gr.update(loading=False), gr.update(value=chatbot_value)
                 else:
                     print("该轮中LLM没有内容输出")
@@ -208,6 +218,7 @@ def submit(input_value, chatbot_value):
         chatbot_value[-1]["content"] = f"处理消息时发生错误: {str(e)}"
         chatbot_value[-1]["status"] = "done"
     
+    _set_blender_agent_status(agent, "idle", "Agent 运行已结束")
     # 更新UI，结束loading状态
     yield gr.update(loading=False), gr.update(value=chatbot_value)
 
@@ -250,6 +261,12 @@ def submit_with_view(input_value, chatbot_value, auto_update_info=True, auto_ren
 
 def cancel(chatbot_value):
     """处理取消事件"""
+    agent = get_agent()
+    if agent and getattr(agent, "blender_client", None) is not None:
+        try:
+            agent.blender_client.cancel_agent_run()
+        except Exception as exc:
+            logger.debug("通知 Blender 停止 Agent 运行失败: %s", exc)
     chatbot_value[-1]["loading"] = False
     chatbot_value[-1]["footer"] = "canceled"
     chatbot_value[-1]["status"] = "done"
@@ -330,11 +347,14 @@ def retry(chatbot_value):
             function_result = chunk.get("function_result")
             
             # 更新聊天内容
+            message_changed = False
+
             if content_chunk:
                 if "content" not in chatbot_value[-1] or chatbot_value[-1]["content"] is None:
                     chatbot_value[-1]["content"] = content_chunk
                 else:
                     chatbot_value[-1]["content"] += content_chunk
+                message_changed = True
                 
             # 如果有函数调用，添加函数调用信息（仅当是新函数时）
             if function_call:
@@ -346,6 +366,7 @@ def retry(chatbot_value):
                         chatbot_value[-1]["content"] = f"正在执行：{function_name}..."
                     else:
                         chatbot_value[-1]["content"] += f"\n正在执行：{function_name}..."
+                    message_changed = True
             
             # 如果有函数调用结果，添加函数调用结果到当前消息
             if function_result:
@@ -354,6 +375,7 @@ def retry(chatbot_value):
                     chatbot_value[-1]["content"] = json.dumps(function_result, ensure_ascii=False, indent=2)
                 else:
                     chatbot_value[-1]["content"] += f"\n\n```json\n{json.dumps(function_result, ensure_ascii=False, indent=2)}\n```"
+                message_changed = True
             
             # 第一次有内容输出时就取消loading状态
             if first_output and (content_chunk or function_call or function_result):
@@ -361,7 +383,8 @@ def retry(chatbot_value):
                 first_output = False
             
             # 更新UI
-            yield gr.update(loading=False), gr.update(value=chatbot_value)
+            if message_changed:
+                yield gr.update(loading=False), gr.update(value=chatbot_value)
         
         # 完成对话，更新最后一条消息的状态
         chatbot_value[-1]["loading"] = False
@@ -373,5 +396,6 @@ def retry(chatbot_value):
         chatbot_value[-1]["content"] = f"处理重试时发生错误: {str(e)}"
         chatbot_value[-1]["status"] = "done"
     
+    _set_blender_agent_status(agent, "idle", "Agent 运行已结束")
     # 更新UI，结束loading状态
     yield gr.update(loading=False), gr.update(value=chatbot_value)

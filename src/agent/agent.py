@@ -33,6 +33,7 @@ PHYSICAL_RULES_PROMPT = """你是 Blender/Infinigen 场景编辑 planner。
 - 表达“旁边/靠墙”时优先用 place_near/place_against_wall。
 - 大型家具默认落地；地毯必须落地；灯和水果等小物体需要支撑面。
 - 缩放保持在合理范围，执行层会把极端 scale clamp 到安全范围。
+- 用户要求调整视角、构图、相机位置、让渲染主体居中或变大/变小时，优先调用 adjust_camera_from_render。
 不要生成 Python 代码，只使用提供的 function call。
 """
 
@@ -223,11 +224,30 @@ class BlenderAgent:
             },
             {
                 "name": "render_scene",
-                "description": "渲染当前场景并返回预览路径。",
+                "description": "渲染当前场景并返回预览路径。默认会先检查相机视角，如果主体不够近或没有看见所有非结构物体，会自动调整 camera 后再渲染。",
                 "parameters": {
                     "output_path": {"type": "string", "description": "输出图片路径，可选。"},
                     "resolution_x": {"type": "integer", "description": "宽度，可选。"},
                     "resolution_y": {"type": "integer", "description": "高度，可选。"},
+                    "auto_adjust_camera": {"type": "boolean", "description": "是否在渲染前自动检查并调整 camera，默认 true。"},
+                    "camera_target": {"type": "string", "description": "可选，指定用于检查构图的目标对象；不填则使用所有非结构资产。"},
+                    "camera_target_fill": {"type": "number", "description": "目标主体画面占比，默认 0.72。"},
+                },
+                "required": [],
+            },
+            {
+                "name": "adjust_camera_from_render",
+                "description": "Camera agent：先渲染透明 mask 图片，分析目标/场景在图片中的像素位置和占比，再自动平移/推拉 Blender camera，最后渲染新的预览图。适合用户要求调整视角、让对象居中、让画面构图更好或渲染主体太小/太大时使用。",
+                "parameters": {
+                    "target": {"type": "string", "description": "要构图的目标对象/类别/自然语言描述；不填则使用场景中的非结构资产。"},
+                    "output_path": {"type": "string", "description": "调整后预览图输出路径，可选。"},
+                    "target_fill": {"type": "number", "description": "目标主体画面占比，0.2-0.95，默认 0.72。"},
+                    "max_iterations": {"type": "integer", "description": "根据渲染图迭代调整次数，默认 3。"},
+                    "tolerance": {"type": "number", "description": "居中和缩放误差容忍度，默认 0.06。"},
+                    "resolution_x": {"type": "integer", "description": "分析用 mask 渲染宽度，默认 768。"},
+                    "resolution_y": {"type": "integer", "description": "分析用 mask 渲染高度，默认 432。"},
+                    "final_resolution_x": {"type": "integer", "description": "最终预览图宽度，默认 1280。"},
+                    "final_resolution_y": {"type": "integer", "description": "最终预览图高度，默认 720。"},
                 },
                 "required": [],
             },

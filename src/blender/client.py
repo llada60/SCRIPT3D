@@ -36,7 +36,11 @@ class BlenderClient:
             params = {}
 
         command = {"type": command_type, "params": params}
-        timeout = 180 if command_type in {"add_infinigen_asset", "edit_generated_asset", "render_scene"} else 30
+        timeout = (
+            180
+            if command_type in {"add_infinigen_asset", "edit_generated_asset", "render_scene", "adjust_camera_from_render"}
+            else 30
+        )
 
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -69,6 +73,26 @@ class BlenderClient:
 
     def get_scene_info(self) -> Dict[str, Any]:
         return self.send_command("get_scene_info")
+
+    def set_agent_status(
+        self,
+        state: str,
+        message: str = "",
+        run_id: Optional[str] = None,
+        operation: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {"state": state, "message": message}
+        if run_id:
+            params["run_id"] = run_id
+        if operation:
+            params["operation"] = operation
+        return self.send_command("set_agent_status", params)
+
+    def get_agent_status(self) -> Dict[str, Any]:
+        return self.send_command("get_agent_status")
+
+    def cancel_agent_run(self) -> Dict[str, Any]:
+        return self.send_command("cancel_agent_run")
 
     def rebuild_scene_index(self, save_path: Optional[str] = None) -> Dict[str, Any]:
         params = {}
@@ -225,6 +249,37 @@ class BlenderClient:
             params["target"] = target
         return self.send_command("apply_physics_rules", params)
 
+    def adjust_camera_from_render(
+        self,
+        target: Optional[str] = None,
+        output_path: Optional[str] = None,
+        resolution_x: int = 768,
+        resolution_y: int = 432,
+        target_fill: float = 0.72,
+        max_iterations: int = 3,
+        tolerance: float = 0.06,
+        recenter_strength: float = 0.75,
+        zoom_strength: float = 0.65,
+        final_resolution_x: int = 1280,
+        final_resolution_y: int = 720,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {
+            "resolution_x": resolution_x,
+            "resolution_y": resolution_y,
+            "target_fill": target_fill,
+            "max_iterations": max_iterations,
+            "tolerance": tolerance,
+            "recenter_strength": recenter_strength,
+            "zoom_strength": zoom_strength,
+            "final_resolution_x": final_resolution_x,
+            "final_resolution_y": final_resolution_y,
+        }
+        if target:
+            params["target"] = target
+        if output_path:
+            params["output_path"] = output_path
+        return self.send_command("adjust_camera_from_render", params)
+
     def render_scene(
         self,
         output_path: Optional[str] = None,
@@ -233,6 +288,9 @@ class BlenderClient:
         return_image: bool = True,
         auto_save: bool = True,
         save_dir: str = "renders",
+        auto_adjust_camera: bool = True,
+        camera_target: Optional[str] = None,
+        camera_target_fill: float = 0.72,
     ) -> Dict[str, Any]:
         if output_path is None and auto_save:
             os.makedirs(save_dir, exist_ok=True)
@@ -245,6 +303,10 @@ class BlenderClient:
         if resolution_y is not None:
             params["resolution_y"] = resolution_y
         params["return_image"] = return_image
+        params["auto_adjust_camera"] = auto_adjust_camera
+        params["camera_target_fill"] = camera_target_fill
+        if camera_target:
+            params["camera_target"] = camera_target
 
         response = self.send_command("render_scene", params)
         result = response.get("result", {})

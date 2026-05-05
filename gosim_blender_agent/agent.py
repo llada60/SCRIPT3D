@@ -49,6 +49,10 @@ class GosimAgent:
             raw_results.append({"action": action.name, "args": action.args, "result": result})
             if action.name == "render_scene" and isinstance(result, dict):
                 preview_path = result.get("path")
+            if action.name == "adjust_camera_from_render" and isinstance(result, dict):
+                render = result.get("render")
+                if isinstance(render, dict):
+                    preview_path = render.get("path")
             lines.append(self._summarize(action, result))
 
         return AgentResult(text="\n".join(line for line in lines if line), raw_results=raw_results, preview_path=preview_path)
@@ -85,6 +89,9 @@ class GosimAgent:
             return f"物理规则检查完成：{corrections} 个修正，{warnings} 个提示。"
         if action.name == "render_scene":
             return f"预览已渲染：{result.get('path')}"
+        if action.name == "adjust_camera_from_render":
+            render = result.get("render", {}) if isinstance(result, dict) else {}
+            return f"Camera agent 已根据渲染图调整相机：{render.get('path')}"
         if action.name == "save_blend":
             return f"场景已保存：{result.get('path')}"
         if action.name == "open_blend":

@@ -1,6 +1,5 @@
 # Gosim2026-Paris
 
-<<<<<<< HEAD
 Standalone natural-language Blender agent for editing Infinigen scenes.
 
 这个工程现在是一个完整独立工程，不再依赖外部的
@@ -85,6 +84,17 @@ http://127.0.0.1:7860
 UI 沿用 LLM-Blender-Agent 的连接、模型选择、聊天、渲染预览流程，但工具函数已经改成 Infinigen 场景编辑工具。
 交互布局保持“左侧网页对话、右侧场景信息和渲染结果”的形式；每次对话工具执行完成后会自动刷新右侧视图。
 
+### UI 更新说明
+
+当前网页 UI 已针对 Gradio/ModelScope Studio 聊天体验做了整理：
+
+- 页面采用更干净的暗色主题，顶部连接区、模型初始化区、聊天区、场景信息区和渲染预览区使用统一的面板间距与边框。
+- 聊天对话框支持稳定的左右气泡排版：用户消息在右侧，Agent 输出在左侧，并分别设置了明确的背景色和文字色。
+- 纯文本用户输入会按普通文本消息渲染；只有上传文件时才使用多模态消息结构，避免空文件结构导致用户消息不可见。
+- Agent 的文本回复、函数调用提示和工具执行结果都会触发 UI 刷新，减少流式输出或工具输出不显示的问题。
+- 长文本、JSON、代码块会自动换行或横向滚动，避免在窄窗口中撑破布局。
+- 响应式布局已适配不同浏览器宽度：桌面端保留右侧场景/渲染面板，小屏下消息气泡会自动放宽到可读宽度。
+
 ## 当前 Agent 工具
 
 LLM 可以调用：
@@ -104,10 +114,30 @@ LLM 可以调用：
 - `place_against_wall`
 - `set_material`
 - `delete_object`
+- `adjust_camera_from_render`
 - `render_scene`
 
 原来的 Rodin、Hyper3D、Hunyuan3D-2 模型生成入口已经不作为功能暴露。
 兼容旧函数名的 `generate_3d_model` 现在会转发到 `add_infinigen_asset`。
+
+### Camera agent
+
+`adjust_camera_from_render` 会在 Blender 内部先渲染一张透明背景的 mask 图，读取图片 alpha 像素包围盒，判断目标在画面中的中心偏移和占比，然后自动平移/推拉当前 camera，并渲染最终预览图。
+
+`render_scene` 默认会在每次正式渲染前自动检查 camera 视角。视角好的标准是：
+
+- 所有非结构资产都在 camera 画面内。
+- 主体在画面中占比足够大，避免相机离物体太远。
+
+如果检查失败，`render_scene` 会先根据场景物体整体包围盒把 camera 对准并拉近，再用透明 mask render 微调居中和距离，然后继续输出最终渲染图。返回结果中的 `camera_auto_adjust` 会记录是否调整、调整前后质量、mask 路径和每步移动信息。
+
+可选参数：
+
+- `target`：要构图的对象、类别或自然语言描述；不填则默认使用场景中的非结构资产。
+- `target_fill`：目标主体画面占比，默认 `0.72`。
+- `max_iterations`：根据 render 结果迭代调整 camera 的次数，默认 `3`。
+- `output_path`：最终预览图输出路径；不填则保存到当前 blend 目录的 `renders/camera_agent_preview.png`。
+- `render_scene` 额外支持 `auto_adjust_camera`、`camera_target`、`camera_target_fill`；默认 `auto_adjust_camera=true`。
 
 ## 示例指令
 
@@ -122,6 +152,8 @@ add a pineapple
 把椅子放到床旁边
 把柜子变成黑色
 \editing 场景中的桌子改成绿色
+调整相机让桌子居中
+调整视角，让场景主体更大一些
 渲染预览
 保存场景
 ```
@@ -192,6 +224,3 @@ python -m gosim_blender_agent.cli generate-bedroom \
 - Blender addon: `addon.py`
 
 只要这个目录完整拷走，Python 依赖装好，就不需要再依赖外部项目目录。
-=======
-# begin 5th May 11:10AM
->>>>>>> 537693ea31a6a776b40e80c29ef6142cf289a351

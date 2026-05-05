@@ -26,6 +26,7 @@ Allowed tools:
 - open_blend {"path": "/absolute/file.blend"}
 - save_blend {}
 - render_scene {}
+- adjust_camera_from_render {"target": "object/category/name", "target_fill": 0.72}
 - add_infinigen_asset {"category_or_factory": "bed|desk|table|side_table|desk_lamp|chair|sofa|cabinet|bookcase|rug|plant|apple|blackberry|green_coconut|hairy_coconut|durian|pineapple|starfruit|strawberry|compositional_fruit", "scale": 1.0}
 - edit_generated_asset {"target": "object/category/name", "prompt": "full editing instruction", "color": "red|blue|green|white|black|wood|#RRGGBB", "preserve_size": true}
 - move_object {"target": "object/category/name", "direction": "left|right|front|back|up|down", "distance": 0.3}
@@ -45,6 +46,7 @@ Hard physical rules:
 - Rugs must rest on the floor.
 - Do not use raw move_object to express "on", "beside", or "against wall" when a placement tool fits.
 - Keep scale factors within a practical range; executor will clamp unsafe values.
+- Use adjust_camera_from_render when the user asks to adjust camera position, view, framing, centering, or render composition.
 
 Always add apply_physics_rules with the edited target/source after spatial edit operations, then add rebuild_scene_index.
 Only omit the apply_physics_rules target when the user asks to check the whole scene.

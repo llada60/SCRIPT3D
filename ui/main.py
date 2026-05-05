@@ -80,8 +80,7 @@ CUSTOM_CSS = """
 }
 
 .setup-card,
-.side-panel,
-.chat-panel {
+.side-panel {
     border: 1px solid var(--gosim-border-soft);
     border-radius: 8px;
     background: rgba(23, 26, 32, 0.92);
@@ -104,8 +103,11 @@ CUSTOM_CSS = """
 }
 
 .chat-panel {
-    padding: 0;
+    padding: 8px 0 0;
     overflow: hidden;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
 }
 
 .workspace-grid {
@@ -137,36 +139,101 @@ CUSTOM_CSS = """
 
 .gosim-chatbot {
     color: var(--gosim-text) !important;
+    min-height: 420px;
+    background: transparent !important;
 }
 
-.gosim-chatbot [class*="message"],
+.gosim-chatbot,
+.gosim-chatbot * {
+    box-sizing: border-box;
+}
+
+.gosim-chatbot [class*="list"],
+.gosim-chatbot [class*="List"],
+.gosim-chatbot [class*="items"],
+.gosim-chatbot [class*="Items"],
+.gosim-chatbot [class*="message-list"],
+.gosim-chatbot [class*="Message-list"] {
+    background: transparent !important;
+    border: 0 !important;
+}
+
 .gosim-chatbot [class*="bubble"],
-.gosim-chatbot [class*="content"] {
-    color: var(--gosim-text);
+.gosim-chatbot [class*="Bubble"],
+.gosim-chatbot [class*="message"],
+.gosim-chatbot [class*="Message"],
+.gosim-chatbot [class*="item"],
+.gosim-chatbot [class*="Item"] {
+    max-width: 100%;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
 }
 
+.gosim-chatbot .ant-bubble-content,
+.gosim-chatbot [class*="bubble-content"],
+.gosim-chatbot [class*="Bubble-content"],
+.gosim-chatbot [class*="message-content"],
+.gosim-chatbot [class*="Message-content"],
+.gosim-chatbot [data-role] {
+    max-width: min(78%, 780px);
+    min-width: 44px;
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 8px;
+    color: var(--gosim-text) !important;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    box-shadow: none !important;
+}
+
+.gosim-chatbot .ant-bubble-end .ant-bubble-content,
+.gosim-chatbot [class*="bubble-end"] [class*="content"],
+.gosim-chatbot [class*="Bubble-end"] [class*="content"],
 .gosim-chatbot [class*="user"] [class*="content"],
-.gosim-chatbot [class*="user"] [class*="bubble"],
-.gosim-chatbot [data-role="user"],
-.gosim-chatbot [role="user"] {
+.gosim-chatbot [data-role="user"] {
+    margin-left: auto;
     background: #2f6f57 !important;
+    border: 0 !important;
     color: #f7fffb !important;
 }
 
+.gosim-chatbot .ant-bubble-start .ant-bubble-content,
+.gosim-chatbot [class*="bubble-start"] [class*="content"],
+.gosim-chatbot [class*="Bubble-start"] [class*="content"],
 .gosim-chatbot [class*="assistant"] [class*="content"],
-.gosim-chatbot [class*="assistant"] [class*="bubble"],
-.gosim-chatbot [data-role="assistant"],
-.gosim-chatbot [role="assistant"] {
+.gosim-chatbot [data-role="assistant"] {
+    margin-right: auto;
     background: #22272f !important;
+    border: 0 !important;
     color: #edf2f8 !important;
+}
+
+.gosim-chatbot [class*="tool"],
+.gosim-chatbot [class*="Tool"],
+.gosim-chatbot [class*="thought"],
+.gosim-chatbot [class*="Thought"] {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
 }
 
 .gosim-chatbot p,
 .gosim-chatbot span,
-.gosim-chatbot div,
 .gosim-chatbot pre,
 .gosim-chatbot code {
     color: inherit;
+}
+
+.gosim-chatbot pre,
+.gosim-chatbot code {
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    border: 0 !important;
+    background: rgba(0, 0, 0, 0.16) !important;
 }
 
 .primary-actions button {
@@ -217,6 +284,30 @@ footer {
 
     .workspace-grid > .gradio-column:last-child {
         min-width: 0;
+    }
+
+    .gosim-chatbot .ant-bubble-content,
+    .gosim-chatbot [class*="bubble-content"],
+    .gosim-chatbot [class*="Bubble-content"],
+    .gosim-chatbot [class*="message-content"],
+    .gosim-chatbot [class*="Message-content"],
+    .gosim-chatbot [data-role] {
+        max-width: 92%;
+    }
+}
+
+@media (max-width: 640px) {
+    .app-title h2 {
+        font-size: 22px;
+    }
+
+    .setup-card,
+    .side-panel {
+        padding: 14px;
+    }
+
+    .gosim-chatbot {
+        min-height: 340px;
     }
 }
 """
