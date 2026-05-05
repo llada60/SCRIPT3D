@@ -393,11 +393,38 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def _safe_path_component(value: str | None, fallback: str) -> str:
+    text = str(value or "").strip()
+    text = re.sub(r"[\\/:\0]+", "_", text)
+    text = re.sub(r"\s+", "_", text)
+    text = re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("._-")
+    return text or fallback
+
+
+def _scene_generation_folder_name() -> str:
+    if bpy.data.filepath:
+        blend_name = _safe_path_component(Path(bpy.data.filepath).stem, "blend")
+        scene_name = _safe_path_component(bpy.context.scene.name, "scene")
+        return _safe_path_component(f"{blend_name}_{scene_name}", "scene")
+
+    scene = bpy.context.scene
+    if not scene.get("gosim_scene_id"):
+        scene["gosim_scene_id"] = f"scene_{uuid.uuid4().hex[:12]}"
+    scene_name = _safe_path_component(scene.name, "scene")
+    scene_id = _safe_path_component(str(scene["gosim_scene_id"]), "scene")
+    return f"{scene_name}_{scene_id}"
+
+
 def _generation_script_dir() -> Path:
     base = Path(bpy.data.filepath).parent if bpy.data.filepath else _project_root()
-    path = base / "generation_scripts"
+    path = base / "generation_scripts" / _scene_generation_folder_name()
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _generation_script_filename(*, asset_id: str | None, category: str) -> str:
+    item_name = asset_id or category
+    return f"{_safe_path_component(item_name, f'asset_{uuid.uuid4().hex[:12]}')}.py"
 
 
 def _generation_script_text(
@@ -411,7 +438,9 @@ def _generation_script_text(
     material_color: str | None = None,
     source_prompt: str | None = None,
 ) -> str:
+    scene_folder = _scene_generation_folder_name()
     payload = {
+        "object_id": asset_id,
         "asset_id": asset_id,
         "category": category,
         "factory_path": factory_path,
@@ -420,6 +449,7 @@ def _generation_script_text(
         "location": location,
         "material_color": material_color,
         "source_prompt": source_prompt,
+        "scene": scene_folder,
     }
     return (
         '"""Reproducible generation record for a GOSIM/Infinigen asset.\n'
@@ -451,7 +481,8 @@ def _write_generation_script(
     material_color: str | None = None,
     source_prompt: str | None = None,
 ) -> str:
-    path = _generation_script_dir() / f"{asset_id}.py"
+    filename = _generation_script_filename(asset_id=asset_id, category=category)
+    path = _generation_script_dir() / filename
     path.write_text(
         _generation_script_text(
             asset_id=asset_id,

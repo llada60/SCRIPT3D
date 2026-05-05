@@ -24,9 +24,14 @@ def main() -> None:
     def chat(message: str, history: list[dict[str, str]]) -> tuple[list[dict[str, str]], str | None, str]:
         try:
             result = agent.handle(message)
+            assistant_content = result.text.rstrip()
+            if assistant_content:
+                assistant_content = f"{assistant_content}\n\n已全部完成"
+            else:
+                assistant_content = "已全部完成"
             history = history + [
                 {"role": "user", "content": message},
-                {"role": "assistant", "content": result.text},
+                {"role": "assistant", "content": assistant_content},
             ]
             raw = json.dumps(result.raw_results, ensure_ascii=False, indent=2)
             return history, result.preview_path, raw
@@ -72,4 +77,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
