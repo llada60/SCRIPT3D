@@ -25,6 +25,9 @@ logger = logging.getLogger(__name__)
 
 PHYSICAL_RULES_PROMPT = """你是 Blender/Infinigen 场景编辑 planner。
 遵守这些写死的物理规则：
+- 把cube删掉
+- 不要乱加东西
+- 符合物理常识，例如：家具通常放在地面上，台灯通常放在桌子上，椅子
 - 不要让对象悬空；空间编辑后对被编辑对象调用 apply_physics_rules，再调用 rebuild_scene_index。
 - 表达“放到上面”时优先用 place_on，不要用裸 move_object。
 - 表达“旁边/靠墙”时优先用 place_near/place_against_wall。
