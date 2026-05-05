@@ -12,6 +12,7 @@ import json
 import math
 import os
 import queue
+import re
 import socketserver
 import sys
 import threading
@@ -60,6 +61,35 @@ ASSET_FACTORY_ALIASES = {
     "地毯": "infinigen.assets.objects.elements.RugFactory",
     "plant": "infinigen.assets.objects.tableware.PlantContainerFactory",
     "植物": "infinigen.assets.objects.tableware.PlantContainerFactory",
+    "apple": "infinigen.assets.objects.fruits.FruitFactoryApple",
+    "苹果": "infinigen.assets.objects.fruits.FruitFactoryApple",
+    "blackberry": "infinigen.assets.objects.fruits.FruitFactoryBlackberry",
+    "黑莓": "infinigen.assets.objects.fruits.FruitFactoryBlackberry",
+    "green_coconut": "infinigen.assets.objects.fruits.FruitFactoryCoconutgreen",
+    "coconutgreen": "infinigen.assets.objects.fruits.FruitFactoryCoconutgreen",
+    "green coconut": "infinigen.assets.objects.fruits.FruitFactoryCoconutgreen",
+    "青椰子": "infinigen.assets.objects.fruits.FruitFactoryCoconutgreen",
+    "椰青": "infinigen.assets.objects.fruits.FruitFactoryCoconutgreen",
+    "hairy_coconut": "infinigen.assets.objects.fruits.FruitFactoryCoconuthairy",
+    "coconuthairy": "infinigen.assets.objects.fruits.FruitFactoryCoconuthairy",
+    "hairy coconut": "infinigen.assets.objects.fruits.FruitFactoryCoconuthairy",
+    "coconut": "infinigen.assets.objects.fruits.FruitFactoryCoconuthairy",
+    "毛椰子": "infinigen.assets.objects.fruits.FruitFactoryCoconuthairy",
+    "椰子": "infinigen.assets.objects.fruits.FruitFactoryCoconuthairy",
+    "durian": "infinigen.assets.objects.fruits.FruitFactoryDurian",
+    "榴莲": "infinigen.assets.objects.fruits.FruitFactoryDurian",
+    "pineapple": "infinigen.assets.objects.fruits.FruitFactoryPineapple",
+    "菠萝": "infinigen.assets.objects.fruits.FruitFactoryPineapple",
+    "凤梨": "infinigen.assets.objects.fruits.FruitFactoryPineapple",
+    "starfruit": "infinigen.assets.objects.fruits.FruitFactoryStarfruit",
+    "star fruit": "infinigen.assets.objects.fruits.FruitFactoryStarfruit",
+    "杨桃": "infinigen.assets.objects.fruits.FruitFactoryStarfruit",
+    "strawberry": "infinigen.assets.objects.fruits.FruitFactoryStrawberry",
+    "草莓": "infinigen.assets.objects.fruits.FruitFactoryStrawberry",
+    "compositional_fruit": "infinigen.assets.objects.fruits.FruitFactoryCompositional",
+    "mixed fruit": "infinigen.assets.objects.fruits.FruitFactoryCompositional",
+    "组合水果": "infinigen.assets.objects.fruits.FruitFactoryCompositional",
+    "复合水果": "infinigen.assets.objects.fruits.FruitFactoryCompositional",
 }
 
 
@@ -75,6 +105,15 @@ CATEGORY_ALIASES = {
     "bookcase": ("bookcase", "shelf", "书架"),
     "rug": ("rug", "地毯"),
     "plant": ("plant", "植物", "盆栽"),
+    "apple": ("apple", "苹果"),
+    "blackberry": ("blackberry", "黑莓"),
+    "green_coconut": ("green_coconut", "coconutgreen", "green coconut", "青椰子", "椰青"),
+    "hairy_coconut": ("hairy_coconut", "coconuthairy", "hairy coconut", "coconut", "毛椰子", "椰子"),
+    "durian": ("durian", "榴莲"),
+    "pineapple": ("pineapple", "菠萝", "凤梨"),
+    "starfruit": ("starfruit", "star fruit", "杨桃"),
+    "strawberry": ("strawberry", "草莓"),
+    "compositional_fruit": ("compositional_fruit", "mixed fruit", "组合水果", "复合水果"),
     "wall": ("wall", "墙"),
     "floor": ("floor", "地面"),
     "ceiling": ("ceiling", "天花"),
@@ -97,6 +136,27 @@ COLOR_MAP = {
     "白": (0.95, 0.95, 0.92, 1.0),
     "黑": (0.01, 0.01, 0.012, 1.0),
     "木": (0.45, 0.25, 0.11, 1.0),
+}
+
+COLOR_ALIASES = {
+    "red": "red",
+    "红": "red",
+    "红色": "red",
+    "blue": "blue",
+    "蓝": "blue",
+    "蓝色": "blue",
+    "green": "green",
+    "绿": "green",
+    "绿色": "green",
+    "white": "white",
+    "白": "white",
+    "白色": "white",
+    "black": "black",
+    "黑": "black",
+    "黑色": "black",
+    "wood": "wood",
+    "木": "wood",
+    "木色": "wood",
 }
 
 
@@ -235,6 +295,93 @@ def _dimensions_from_bbox(bbox_min: list[float], bbox_max: list[float]) -> list[
     return [max(0.0, bbox_max[i] - bbox_min[i]) for i in range(3)]
 
 
+def _alias_in_text(alias: str, text: str) -> bool:
+    alias_lower = alias.lower()
+    if re.search(r"[a-z0-9]", alias_lower):
+        pattern = rf"(?<![a-z0-9]){re.escape(alias_lower)}(?![a-z0-9])"
+        return re.search(pattern, text) is not None
+    return alias_lower in text
+
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _generation_script_dir() -> Path:
+    base = Path(bpy.data.filepath).parent if bpy.data.filepath else _project_root()
+    path = base / "generation_scripts"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _generation_script_text(
+    *,
+    asset_id: str,
+    category: str,
+    factory_path: str,
+    seed: int,
+    scale: float,
+    location: list[float],
+    material_color: str | None = None,
+    source_prompt: str | None = None,
+) -> str:
+    payload = {
+        "asset_id": asset_id,
+        "category": category,
+        "factory_path": factory_path,
+        "seed": seed,
+        "scale": scale,
+        "location": location,
+        "material_color": material_color,
+        "source_prompt": source_prompt,
+    }
+    return (
+        '"""Reproducible generation record for a GOSIM/Infinigen asset.\n'
+        "Run inside Blender with the GOSIM addon loaded if you want to replay it.\n"
+        '"""\n\n'
+        "import json\n\n"
+        f"GENERATION = {json.dumps(payload, ensure_ascii=False, indent=2)}\n\n"
+        "def replay(client):\n"
+        "    result = client.add_infinigen_asset(\n"
+        "        category_or_factory=GENERATION['factory_path'],\n"
+        "        seed=GENERATION['seed'],\n"
+        "        location=tuple(GENERATION['location']),\n"
+        "        scale=GENERATION['scale'],\n"
+        "    )\n"
+        "    if GENERATION.get('material_color'):\n"
+        "        client.set_material(result['object_id'], color=GENERATION['material_color'])\n"
+        "    return result\n"
+    )
+
+
+def _write_generation_script(
+    *,
+    asset_id: str,
+    category: str,
+    factory_path: str,
+    seed: int,
+    scale: float,
+    location: list[float],
+    material_color: str | None = None,
+    source_prompt: str | None = None,
+) -> str:
+    path = _generation_script_dir() / f"{asset_id}.py"
+    path.write_text(
+        _generation_script_text(
+            asset_id=asset_id,
+            category=category,
+            factory_path=factory_path,
+            seed=seed,
+            scale=scale,
+            location=location,
+            material_color=material_color,
+            source_prompt=source_prompt,
+        ),
+        encoding="utf-8",
+    )
+    return str(path)
+
+
 def _category_from_text(text: str, obj_type: str = "") -> str:
     lowered = text.lower()
     if obj_type == "LIGHT":
@@ -242,7 +389,7 @@ def _category_from_text(text: str, obj_type: str = "") -> str:
     if obj_type == "CAMERA":
         return "camera"
     for category, aliases in CATEGORY_ALIASES.items():
-        if any(alias.lower() in lowered for alias in aliases):
+        if any(_alias_in_text(alias, lowered) for alias in aliases):
             return category
     return "object"
 
@@ -260,10 +407,19 @@ def _category_from_asset_request(request: str, factory_path: str) -> str:
         ("bed", ("bed", "床")),
         ("rug", ("rug", "地毯")),
         ("plant", ("plant", "植物")),
+        ("blackberry", ("fruitfactoryblackberry", "blackberry", "黑莓")),
+        ("green_coconut", ("fruitfactorycoconutgreen", "green_coconut", "coconutgreen", "green coconut", "青椰子", "椰青")),
+        ("hairy_coconut", ("fruitfactorycoconuthairy", "hairy_coconut", "coconuthairy", "hairy coconut", "coconut", "毛椰子", "椰子")),
+        ("durian", ("fruitfactorydurian", "durian", "榴莲")),
+        ("pineapple", ("fruitfactorypineapple", "pineapple", "菠萝", "凤梨")),
+        ("apple", ("fruitfactoryapple", "apple", "苹果")),
+        ("starfruit", ("fruitfactorystarfruit", "starfruit", "star fruit", "杨桃")),
+        ("strawberry", ("fruitfactorystrawberry", "strawberry", "草莓")),
+        ("compositional_fruit", ("fruitfactorycompositional", "compositional_fruit", "mixed fruit", "组合水果", "复合水果")),
         ("table", ("table", "桌")),
     )
     for category, aliases in priority:
-        if any(alias in lowered for alias in aliases):
+        if any(_alias_in_text(alias, lowered) for alias in aliases):
             return category
     return _category_from_text(lowered)
 
@@ -368,6 +524,12 @@ def _build_scene_index(save_path: str | None = None) -> dict[str, Any]:
             "center": _center_from_bbox(bbox_min, bbox_max),
             "dimensions": _dimensions_from_bbox(bbox_min, bbox_max),
             "materials": materials,
+            "generation": {
+                "script_path": root.get("gosim_generation_script"),
+                "seed": root.get("gosim_seed"),
+                "source_prompt": root.get("gosim_source_prompt"),
+                "edit_prompt": root.get("gosim_edit_prompt"),
+            },
             "description": "",
             "relations": {"near": [], "on_top_of": None, "supports": [], "nearest": None, "nearest_wall": None},
         }
@@ -531,6 +693,19 @@ def _make_material(color: str | None, material_name: str | None) -> bpy.types.Ma
     return mat
 
 
+def _color_from_prompt(prompt: str, explicit: str | None = None) -> str | None:
+    if explicit:
+        return explicit
+    lowered = prompt.lower()
+    hex_match = re.search(r"#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?", prompt)
+    if hex_match:
+        return hex_match.group(0)
+    for key, color in COLOR_ALIASES.items():
+        if key.lower() in lowered:
+            return color
+    return None
+
+
 def _ensure_infinigen_on_path() -> Path:
     candidates = [
         os.getenv("GOSIM_INFINIGEN_ROOT"),
@@ -609,6 +784,98 @@ def _tag_asset_objects(root_objects: list[bpy.types.Object], category: str, fact
     return asset_id
 
 
+def _set_asset_metadata(
+    asset: dict[str, Any],
+    *,
+    seed: int,
+    source_prompt: str | None,
+    edit_prompt: str | None,
+    generation_script: str,
+) -> None:
+    for obj in _objects_for_asset(asset):
+        obj["gosim_seed"] = seed
+        if source_prompt:
+            obj["gosim_source_prompt"] = source_prompt
+        if edit_prompt:
+            obj["gosim_edit_prompt"] = edit_prompt
+        obj["gosim_generation_script"] = generation_script
+
+
+def _spawn_infinigen_asset(
+    category_or_factory: str,
+    *,
+    seed: int,
+    location: Vector,
+    scale: float,
+    source_prompt: str | None = None,
+    material_color: str | None = None,
+) -> dict[str, Any]:
+    factory_path, cls = _resolve_factory(category_or_factory)
+    category = _category_from_asset_request(str(category_or_factory), factory_path)
+
+    factory = cls(seed)
+    if hasattr(factory, "spawn_asset"):
+        asset = factory.spawn_asset(seed)
+    elif hasattr(factory, "create_asset"):
+        asset = factory.create_asset()
+    else:
+        raise RuntimeError(f"{factory_path} has no spawn_asset/create_asset method")
+
+    if hasattr(factory, "finalize_assets"):
+        factory.finalize_assets(asset)
+
+    root_objects = _normalize_spawned_objects(asset)
+    if not root_objects:
+        raise RuntimeError(f"{factory_path} did not return Blender objects")
+
+    asset_id = _tag_asset_objects(root_objects, category, factory_path)
+    bpy.context.view_layer.update()
+    temp_asset = _resolve_asset(asset_id)
+    bottom = Vector(temp_asset["bbox_min"])
+    _move_asset(temp_asset, location - bottom)
+    for root in root_objects:
+        root.scale = root.scale * scale
+    bpy.context.view_layer.update()
+
+    final_asset = _resolve_asset(asset_id)
+    if material_color:
+        mat = _make_material(material_color, None)
+        for obj in _objects_for_asset(final_asset):
+            if obj.type == "MESH" and obj.data:
+                obj.data.materials.clear()
+                obj.data.materials.append(mat)
+        bpy.context.view_layer.update()
+        final_asset = _resolve_asset(asset_id)
+
+    script_path = _write_generation_script(
+        asset_id=asset_id,
+        category=category,
+        factory_path=factory_path,
+        seed=seed,
+        scale=scale,
+        location=[float(v) for v in location],
+        material_color=material_color,
+        source_prompt=source_prompt,
+    )
+    _set_asset_metadata(
+        final_asset,
+        seed=seed,
+        source_prompt=source_prompt,
+        edit_prompt=None,
+        generation_script=script_path,
+    )
+
+    return {
+        "object_id": asset_id,
+        "category": category,
+        "factory": factory_path,
+        "root_names": [obj.name for obj in root_objects],
+        "bbox_min": final_asset["bbox_min"],
+        "bbox_max": final_asset["bbox_max"],
+        "generation_script": script_path,
+    }
+
+
 def cmd_ping(_payload: dict[str, Any]) -> dict[str, Any]:
     return {"message": "pong", "host": HOST, "port": PORT, "blend_path": bpy.data.filepath}
 
@@ -669,41 +936,93 @@ def cmd_add_infinigen_asset(payload: dict[str, Any]) -> dict[str, Any]:
     seed = int(payload.get("seed", 0))
     location = Vector(payload.get("location", [0.0, 0.0, 0.0]))
     scale = float(payload.get("scale", 1.0))
-    factory_path, cls = _resolve_factory(category_or_factory)
-    category = _category_from_asset_request(str(category_or_factory), factory_path)
+    source_prompt = payload.get("source_prompt") or payload.get("prompt")
+    material_color = _color_from_prompt(str(source_prompt or ""), payload.get("color"))
+    return _spawn_infinigen_asset(
+        str(category_or_factory),
+        seed=seed,
+        location=location,
+        scale=scale,
+        source_prompt=source_prompt,
+        material_color=material_color,
+    )
 
-    factory = cls(seed)
-    if hasattr(factory, "spawn_asset"):
-        asset = factory.spawn_asset(seed)
-    elif hasattr(factory, "create_asset"):
-        asset = factory.create_asset()
-    else:
-        raise RuntimeError(f"{factory_path} has no spawn_asset/create_asset method")
 
-    if hasattr(factory, "finalize_assets"):
-        factory.finalize_assets(asset)
+def cmd_edit_generated_asset(payload: dict[str, Any]) -> dict[str, Any]:
+    prompt = str(payload.get("prompt") or payload.get("edit_prompt") or "")
+    target_ref = payload.get("target")
+    if not target_ref and prompt:
+        target_ref = prompt
 
-    root_objects = _normalize_spawned_objects(asset)
-    if not root_objects:
-        raise RuntimeError(f"{factory_path} did not return Blender objects")
+    old_asset = _resolve_asset(target_ref)
+    factory_path = old_asset.get("factory") or _category_from_text(old_asset.get("category", "object"))
+    seed = int(payload.get("seed", old_asset.get("generation", {}).get("seed") or 0))
+    material_color = _color_from_prompt(prompt, payload.get("color"))
+    old_bbox_min = Vector(old_asset["bbox_min"])
+    old_dims = Vector(old_asset["dimensions"])
 
-    asset_id = _tag_asset_objects(root_objects, category, factory_path)
+    new_asset = _spawn_infinigen_asset(
+        str(factory_path),
+        seed=seed,
+        location=old_bbox_min,
+        scale=1.0,
+        source_prompt=old_asset.get("generation", {}).get("source_prompt"),
+        material_color=material_color,
+    )
+
+    current_new = _resolve_asset(new_asset["object_id"])
+    new_dims = Vector(current_new["dimensions"])
+    ratios = [
+        old_dims[i] / new_dims[i]
+        for i in range(3)
+        if new_dims[i] > 1e-6 and old_dims[i] > 1e-6
+    ]
+    fit_scale = min(ratios) if ratios else 1.0
+    if payload.get("preserve_size", True):
+        for obj in _root_objects_for_asset(current_new):
+            obj.scale = obj.scale * fit_scale
+        bpy.context.view_layer.update()
+        current_new = _resolve_asset(new_asset["object_id"])
+
+    _set_asset_location_by_bbox_min(current_new, old_bbox_min)
+    current_new = _resolve_asset(new_asset["object_id"])
+
+    script_path = _write_generation_script(
+        asset_id=new_asset["object_id"],
+        category=current_new["category"],
+        factory_path=str(factory_path),
+        seed=seed,
+        scale=fit_scale,
+        location=[float(v) for v in old_bbox_min],
+        material_color=material_color,
+        source_prompt=prompt,
+    )
+    _set_asset_metadata(
+        current_new,
+        seed=seed,
+        source_prompt=old_asset.get("generation", {}).get("source_prompt"),
+        edit_prompt=prompt,
+        generation_script=script_path,
+    )
+
+    old_objects = _objects_for_asset(old_asset)
+    for obj in old_objects:
+        bpy.data.objects.remove(obj, do_unlink=True)
     bpy.context.view_layer.update()
-    temp_asset = _resolve_asset(asset_id)
-    bottom = Vector(temp_asset["bbox_min"])
-    _move_asset(temp_asset, location - bottom)
-    for root in root_objects:
-        root.scale = root.scale * scale
-    bpy.context.view_layer.update()
+    final_asset = _resolve_asset(new_asset["object_id"])
 
-    final_asset = _resolve_asset(asset_id)
     return {
-        "object_id": asset_id,
-        "category": category,
+        "message": f"Edited {old_asset['name']} via generation script and replaced it with {final_asset['name']}",
+        "old_object_id": old_asset["object_id"],
+        "object_id": final_asset["object_id"],
+        "category": final_asset["category"],
         "factory": factory_path,
-        "root_names": [obj.name for obj in root_objects],
+        "edit_prompt": prompt,
+        "material_color": material_color,
+        "generation_script": script_path,
         "bbox_min": final_asset["bbox_min"],
         "bbox_max": final_asset["bbox_max"],
+        "deleted_count": len(old_objects),
     }
 
 
@@ -868,6 +1187,7 @@ COMMANDS = {
     "open_blend": cmd_open_blend,
     "save_blend": cmd_save_blend,
     "add_infinigen_asset": cmd_add_infinigen_asset,
+    "edit_generated_asset": cmd_edit_generated_asset,
     "move_object": cmd_move_object,
     "scale_object": cmd_scale_object,
     "rotate_object": cmd_rotate_object,

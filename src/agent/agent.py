@@ -30,6 +30,9 @@ class BlenderAgent:
         self.messages: list[dict[str, Any]] = []
         self._init_functions()
 
+    def update_blender_client(self, blender_client: BlenderClient):
+        self.blender_client = blender_client
+
     def _init_functions(self):
         self.functions = [
             {
@@ -53,7 +56,7 @@ class BlenderAgent:
                     "text": {"type": "string", "description": "查询文本，例如：床旁边的桌子、台灯、desk"},
                     "category": {
                         "type": "string",
-                        "description": "可选类别：bed, desk, table, side_table, lamp, chair, sofa, cabinet, bookcase, rug, plant, wall, floor, room",
+                        "description": "可选类别：bed, desk, table, side_table, lamp, chair, sofa, cabinet, bookcase, rug, plant, apple, blackberry, green_coconut, hairy_coconut, durian, pineapple, starfruit, strawberry, compositional_fruit, wall, floor, room",
                     },
                 },
                 "required": [],
@@ -80,13 +83,27 @@ class BlenderAgent:
                 "parameters": {
                     "category_or_factory": {
                         "type": "string",
-                        "description": "资产类别或 Infinigen factory，例如 bed, desk, side_table, desk_lamp, chair, sofa, cabinet, bookcase, rug, plant。",
+                        "description": "资产类别或 Infinigen factory，例如 bed, desk, side_table, desk_lamp, chair, sofa, cabinet, bookcase, rug, plant, apple, blackberry, green_coconut, hairy_coconut, durian, pineapple, starfruit, strawberry, compositional_fruit。",
                     },
                     "seed": {"type": "integer", "description": "随机种子，可选。"},
                     "location": {"type": "array", "description": "放置位置 [x, y, z]，可选。"},
                     "scale": {"type": "number", "description": "整体缩放，默认 1.0。"},
                 },
                 "required": ["category_or_factory"],
+            },
+            {
+                "name": "edit_generated_asset",
+                "description": "编辑已生成资产的生成脚本，重新生成并替换场景中的旧资产，同时保持原位置和大小对齐。用户以 \\editing 开头时优先使用。",
+                "parameters": {
+                    "target": {"type": "string", "description": "目标对象，例如 桌子、desk、asset_xxx。"},
+                    "prompt": {"type": "string", "description": "完整编辑指令，例如：场景中的桌子改成绿色。"},
+                    "color": {
+                        "type": "string",
+                        "description": "可选颜色：red, blue, green, white, black, wood 或 #RRGGBB。",
+                    },
+                    "preserve_size": {"type": "boolean", "description": "是否保持原资产大小，默认 true。"},
+                },
+                "required": ["target", "prompt"],
             },
             {
                 "name": "move_object",

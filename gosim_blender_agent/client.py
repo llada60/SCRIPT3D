@@ -69,6 +69,23 @@ class BlenderClient:
             },
         )
 
+    def edit_generated_asset(
+        self,
+        target: str,
+        prompt: str,
+        color: str | None = None,
+        preserve_size: bool = True,
+    ) -> Any:
+        return self.request(
+            "edit_generated_asset",
+            {
+                "target": target,
+                "prompt": prompt,
+                "color": color,
+                "preserve_size": preserve_size,
+            },
+        )
+
     def move_object(self, target: str, direction: str, distance: float) -> Any:
         return self.request(
             "move_object",
@@ -121,4 +138,3 @@ class BlenderClient:
                 "resolution": list(resolution),
             },
         )
-

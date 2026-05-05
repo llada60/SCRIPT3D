@@ -95,6 +95,7 @@ LLM 可以调用：
 - `open_blend`
 - `save_blend`
 - `add_infinigen_asset`
+- `edit_generated_asset`
 - `move_object`
 - `scale_object`
 - `rotate_object`
@@ -113,14 +114,22 @@ LLM 可以调用：
 ```text
 添加一张书桌
 添加一盏台灯
+添加一个苹果
+add a pineapple
 把台灯放到桌子上
 把床往右移动 0.3 米
 把桌子放大 1.2
 把椅子放到床旁边
 把柜子变成黑色
+\editing 场景中的桌子改成绿色
 渲染预览
 保存场景
 ```
+
+`add_infinigen_asset` 额外支持 `third_party/infinigen/infinigen/assets/objects/fruits`
+下的水果资产：`apple`, `blackberry`, `green_coconut`, `hairy_coconut`,
+`durian`, `pineapple`, `starfruit`, `strawberry`, `compositional_fruit`。
+对应中文 prompt 如“苹果、黑莓、青椰子、椰子、榴莲、菠萝、凤梨、杨桃、草莓、组合水果”也会被解析。
 
 ## CLI
 
@@ -168,8 +177,11 @@ python -m gosim_blender_agent.cli generate-bedroom \
 - `materials`
 - `relations`
 - `description`
+- `generation`
 
 后续要接 RAG/vector DB 时，可以直接对 `description` 和 `relations` 做 embedding。
+
+生成资产会额外写入 `generation_scripts/{asset_id}.py`，用于追踪 factory、seed、prompt 和后续 editing 修改。
 
 ## 独立性说明
 

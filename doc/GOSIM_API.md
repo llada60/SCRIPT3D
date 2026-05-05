@@ -26,6 +26,7 @@ Responses include both shapes:
 - `open_blend`
 - `save_blend`
 - `add_infinigen_asset`
+- `edit_generated_asset`
 - `move_object`
 - `scale_object`
 - `rotate_object`
@@ -39,3 +40,22 @@ Responses include both shapes:
 `generate_3d_model` is kept only as a Python client compatibility wrapper and
 forwards to `add_infinigen_asset`.
 
+## Generated Asset Editing
+
+Assets inserted through `add_infinigen_asset` are tagged with generation metadata
+and a reproducible Python record under `generation_scripts/{asset_id}.py`.
+
+`edit_generated_asset` accepts:
+
+```json
+{
+  "target": "desk",
+  "prompt": "场景中的桌子改成绿色",
+  "color": "green",
+  "preserve_size": true
+}
+```
+
+The addon resolves the target asset, updates the generation record, respawns the
+asset from its original Infinigen factory, applies the requested edit, aligns the
+new bounding box to the old position and size, and removes the old asset.

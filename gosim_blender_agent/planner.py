@@ -26,6 +26,10 @@ class RulePlanner:
         lowered = raw.lower()
         actions: list[Action] = []
 
+        editing = self._plan_editing(raw)
+        if editing:
+            return [editing, Action("rebuild_scene_index")]
+
         blend_path = self._find_blend_path(raw)
         if blend_path:
             return [Action("open_blend", {"path": blend_path}), Action("rebuild_scene_index")]
@@ -83,6 +87,23 @@ class RulePlanner:
             return actions
 
         return [Action("query_objects", {"text": raw})]
+
+    def _plan_editing(self, text: str) -> Action | None:
+        lowered = text.lower().strip()
+        prefixes = ("\\editing", "/editing", "editing", "编辑生成", "编辑物体")
+        if not lowered.startswith(prefixes):
+            return None
+        prompt = text
+        for prefix in prefixes:
+            if lowered.startswith(prefix):
+                prompt = text[len(prefix) :].strip()
+                break
+        target = self._extract_target(prompt) or self._extract_edit_target(prompt) or prompt
+        color = self._extract_color(prompt)
+        args: dict[str, Any] = {"target": target, "prompt": prompt or text, "preserve_size": True}
+        if color:
+            args["color"] = color
+        return Action("edit_generated_asset", args)
 
     def _plan_add(self, text: str) -> list[Action] | None:
         if not any(key in text.lower() for key in ("添加", "加一", "加个", "放一个", "add", "create")):
@@ -170,6 +191,52 @@ class RulePlanner:
                 color = value
                 break
         return Action("set_material", {"target": self._extract_target(text) or text, "color": color})
+
+    def _extract_color(self, text: str) -> str | None:
+        colors = {
+            "红": "red",
+            "红色": "red",
+            "蓝": "blue",
+            "蓝色": "blue",
+            "绿": "green",
+            "绿色": "green",
+            "白": "white",
+            "白色": "white",
+            "黑": "black",
+            "黑色": "black",
+            "木": "wood",
+            "木色": "wood",
+            "red": "red",
+            "blue": "blue",
+            "green": "green",
+            "white": "white",
+            "black": "black",
+            "wood": "wood",
+        }
+        lowered = text.lower()
+        hex_match = re.search(r"#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?", text)
+        if hex_match:
+            return hex_match.group(0)
+        for key, value in colors.items():
+            if key in lowered:
+                return value
+        return None
+
+    def _extract_edit_target(self, text: str) -> str | None:
+        patterns = [
+            r"(?:场景中的|场景里(?:的)?|把|将)?\s*(?P<target>[^，。,\.]+?)(?:改成|变成|换成|编辑成|edit|change)",
+            r"(?:edit|change)\s+(?P<target>[a-zA-Z0-9_\- .]+?)\s+(?:to|into)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                target = match.group("target").strip()
+                target = re.sub(r"^(场景中的|场景里的|场景里|的)", "", target).strip()
+                if target:
+                    spec = resolve_asset(target)
+                    return spec.category if spec else target
+        spec = resolve_asset(text)
+        return spec.category if spec else None
 
     def _plan_place_on(self, text: str) -> Action | None:
         lowered = text.lower()

@@ -36,7 +36,7 @@ class BlenderClient:
             params = {}
 
         command = {"type": command_type, "params": params}
-        timeout = 180 if command_type in {"add_infinigen_asset", "render_scene"} else 30
+        timeout = 180 if command_type in {"add_infinigen_asset", "edit_generated_asset", "render_scene"} else 30
 
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -128,6 +128,22 @@ class BlenderClient:
         if not category:
             return {"status": "error", "message": "请提供要生成的 Infinigen 资产类别"}
         return self.add_infinigen_asset(category_or_factory=category)
+
+    def edit_generated_asset(
+        self,
+        target: str,
+        prompt: str,
+        color: Optional[str] = None,
+        preserve_size: bool = True,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {
+            "target": target,
+            "prompt": prompt,
+            "preserve_size": preserve_size,
+        }
+        if color:
+            params["color"] = color
+        return self.send_command("edit_generated_asset", params)
 
     def move_object(self, target: str, direction: str = "right", distance: float = 0.3) -> Dict[str, Any]:
         return self.send_command(

@@ -70,6 +70,11 @@ class GosimAgent:
             return f"找到 {len(matches)} 个匹配物体：{names}"
         if action.name == "add_infinigen_asset":
             return f"已添加 Infinigen 资产：{result.get('object_id')} ({result.get('category')})。"
+        if action.name == "edit_generated_asset":
+            return (
+                f"已编辑并替换生成资产：{result.get('old_object_id')} -> {result.get('object_id')}；"
+                f"生成脚本：{result.get('generation_script')}"
+            )
         if action.name in {"move_object", "scale_object", "rotate_object", "set_material", "place_on", "place_near", "place_against_wall", "delete_object"}:
             return result.get("message", f"{action.name} 完成。") if isinstance(result, dict) else f"{action.name} 完成。"
         if action.name == "render_scene":

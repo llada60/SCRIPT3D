@@ -60,6 +60,7 @@ Implemented Blender commands:
 - `open_blend`
 - `save_blend`
 - `add_infinigen_asset`
+- `edit_generated_asset`
 - `move_object`
 - `scale_object`
 - `rotate_object`
@@ -80,8 +81,21 @@ There are two generation paths:
 
 2. In-Blender asset insertion through `add_infinigen_asset`.
    This imports Infinigen factory classes such as `BedFactory`,
-   `SimpleDeskFactory`, and `DeskLampFactory`, spawns the asset, tags it with
-   GOSIM metadata, places it in the current scene, and refreshes the index.
+   `SimpleDeskFactory`, `DeskLampFactory`, and fruit factories under
+   `infinigen.assets.objects.fruits`, spawns the asset, tags it with GOSIM
+   metadata, places it in the current scene, and refreshes the index.
+
+## Generated Asset Editing
+
+When an asset is generated in Blender, the addon records the factory path, seed,
+source prompt, and a reproducible Python generation script path on the asset's
+custom properties. The scene index exposes this as `generation`.
+
+Messages starting with `\editing` are planned as `edit_generated_asset`. The
+addon resolves the target asset through the scene index, rewrites the generation
+record with the edit prompt, respawns the asset from the original factory,
+applies supported edits such as material color, aligns the replacement to the
+old asset's bounding box, and removes the old object group.
 
 ## Recommended Next Extensions
 

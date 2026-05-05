@@ -7,6 +7,7 @@ strings with Infinigen's own import helpers.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 
@@ -89,7 +90,60 @@ ASSET_SPECS: tuple[AssetSpec, ...] = (
         "infinigen.assets.objects.tableware.PlantContainerFactory",
         ("plant", "盆栽", "植物"),
     ),
+    AssetSpec(
+        "apple",
+        "infinigen.assets.objects.fruits.FruitFactoryApple",
+        ("apple", "苹果"),
+    ),
+    AssetSpec(
+        "blackberry",
+        "infinigen.assets.objects.fruits.FruitFactoryBlackberry",
+        ("blackberry", "黑莓"),
+    ),
+    AssetSpec(
+        "green_coconut",
+        "infinigen.assets.objects.fruits.FruitFactoryCoconutgreen",
+        ("green coconut", "coconutgreen", "青椰子", "椰青"),
+    ),
+    AssetSpec(
+        "hairy_coconut",
+        "infinigen.assets.objects.fruits.FruitFactoryCoconuthairy",
+        ("hairy coconut", "coconuthairy", "coconut", "毛椰子", "椰子"),
+    ),
+    AssetSpec(
+        "durian",
+        "infinigen.assets.objects.fruits.FruitFactoryDurian",
+        ("durian", "榴莲"),
+    ),
+    AssetSpec(
+        "pineapple",
+        "infinigen.assets.objects.fruits.FruitFactoryPineapple",
+        ("pineapple", "菠萝", "凤梨"),
+    ),
+    AssetSpec(
+        "starfruit",
+        "infinigen.assets.objects.fruits.FruitFactoryStarfruit",
+        ("starfruit", "star fruit", "杨桃"),
+    ),
+    AssetSpec(
+        "strawberry",
+        "infinigen.assets.objects.fruits.FruitFactoryStrawberry",
+        ("strawberry", "草莓"),
+    ),
+    AssetSpec(
+        "compositional_fruit",
+        "infinigen.assets.objects.fruits.FruitFactoryCompositional",
+        ("compositional fruit", "mixed fruit", "组合水果", "复合水果"),
+    ),
 )
+
+
+def _alias_matches(normalized: str, alias: str) -> bool:
+    alias_lower = alias.lower()
+    if re.search(r"[a-z0-9]", alias_lower):
+        pattern = rf"(?<![a-z0-9]){re.escape(alias_lower)}(?![a-z0-9])"
+        return re.search(pattern, normalized) is not None
+    return alias_lower in normalized
 
 
 def resolve_asset(text: str) -> AssetSpec | None:
@@ -97,7 +151,7 @@ def resolve_asset(text: str) -> AssetSpec | None:
     for spec in ASSET_SPECS:
         if normalized == spec.category or normalized == spec.factory.lower():
             return spec
-        if any(alias.lower() in normalized for alias in spec.aliases):
+        if any(_alias_matches(normalized, alias) for alias in spec.aliases):
             return spec
     return None
 
@@ -112,4 +166,3 @@ def registry_payload() -> list[dict[str, object]]:
         }
         for spec in ASSET_SPECS
     ]
-
