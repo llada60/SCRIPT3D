@@ -60,6 +60,18 @@ def get_agent() -> Optional[BlenderAgent]:
         return globals.agents[session_id]
 
 
+def _format_user_chat_content(input_value):
+    """Use plain text for text-only messages so the chatbot renders them reliably."""
+    text = input_value.get("text", "")
+    files = input_value.get("files") or []
+    if not files:
+        return text
+    return [
+        {"type": "text", "content": text},
+        {"type": "file", "content": files},
+    ]
+
+
 def submit(input_value, chatbot_value):
     """处理聊天提交事件"""
     # 获取当前Agent
@@ -69,10 +81,7 @@ def submit(input_value, chatbot_value):
         chatbot_value.append(
             {
                 "role": "user",
-                "content": [
-                    {"type": "text", "content": input_value["text"]},
-                    {"type": "file", "content": [file for file in input_value["files"]]},
-                ],
+                "content": _format_user_chat_content(input_value),
             }
         )
         chatbot_value.append({
@@ -87,10 +96,7 @@ def submit(input_value, chatbot_value):
     chatbot_value.append(
         {
             "role": "user",
-            "content": [
-                {"type": "text", "content": input_value["text"]},
-                {"type": "file", "content": [file for file in input_value["files"]]},
-            ],
+            "content": _format_user_chat_content(input_value),
         }
     )
     chatbot_value.append({"role": "assistant", "loading": True, "status": "pending"})

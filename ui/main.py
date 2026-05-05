@@ -135,6 +135,40 @@ CUSTOM_CSS = """
     border-radius: 6px !important;
 }
 
+.gosim-chatbot {
+    color: var(--gosim-text) !important;
+}
+
+.gosim-chatbot [class*="message"],
+.gosim-chatbot [class*="bubble"],
+.gosim-chatbot [class*="content"] {
+    color: var(--gosim-text);
+}
+
+.gosim-chatbot [class*="user"] [class*="content"],
+.gosim-chatbot [class*="user"] [class*="bubble"],
+.gosim-chatbot [data-role="user"],
+.gosim-chatbot [role="user"] {
+    background: #2f6f57 !important;
+    color: #f7fffb !important;
+}
+
+.gosim-chatbot [class*="assistant"] [class*="content"],
+.gosim-chatbot [class*="assistant"] [class*="bubble"],
+.gosim-chatbot [data-role="assistant"],
+.gosim-chatbot [role="assistant"] {
+    background: #22272f !important;
+    color: #edf2f8 !important;
+}
+
+.gosim-chatbot p,
+.gosim-chatbot span,
+.gosim-chatbot div,
+.gosim-chatbot pre,
+.gosim-chatbot code {
+    color: inherit;
+}
+
 .primary-actions button {
     min-height: 44px;
     font-weight: 650;
