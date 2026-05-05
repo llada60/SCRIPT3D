@@ -11,6 +11,7 @@ from ui.utils.blender_utils import get_scene_info, render_scene_and_return_image
 import time
 from src.agent.agent import BlenderAgent
 from ui.globals import agents
+from ui.avatar_config import generation_message, user_message, verifier_message
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -122,45 +123,36 @@ def _format_tool_result_details(function_result: Dict[str, Any]) -> str:
 
 def submit(input_value, chatbot_value):
     """处理聊天提交事件"""
+    chatbot_value = chatbot_value or []
+
     # 获取当前Agent
     agent = get_agent()
     if agent is None:
         logger.error("No available Agent instance found")
-        chatbot_value.append(
-            {
-                "role": "user",
-                "content": _format_user_chat_content(input_value),
-            }
-        )
-        chatbot_value.append({
-            "role": "assistant", 
-            "content": "System error: no available Agent instance was found. Please check that Blender and the LLM are configured correctly.",
-            "status": "done"
-        })
+        chatbot_value.append(user_message(_format_user_chat_content(input_value)))
+        chatbot_value.append(generation_message(
+            "System error: no available Agent instance was found. Please check that Blender and the LLM are configured correctly.",
+            status="done",
+        ))
         yield gr.update(value=None), gr.update(value=chatbot_value)
         return
 
     # 添加用户消息到聊天界面
-    chatbot_value.append(
-        {
-            "role": "user",
-            "content": _format_user_chat_content(input_value),
-        }
-    )
-    chatbot_value.append({"role": "assistant", "loading": True, "status": "pending"})
+    chatbot_value.append(user_message(_format_user_chat_content(input_value)))
+    chatbot_value.append(generation_message(loading=True, status="pending"))
     
     # 更新UI，清空输入框并显示loading状态
     yield gr.update(value=None, loading=True), gr.update(value=chatbot_value)
     
     try:
         # 构建用户消息格式
-        user_message = (input_value or {}).get("text", "")
+        llm_user_message = (input_value or {}).get("text", "")
         
         # 如果有文件，添加到用户消息
         input_files = (input_value or {}).get("files") or []
         if input_files:
-            user_message = [
-                {"type": "text", "text": user_message},
+            llm_user_message = [
+                {"type": "text", "text": llm_user_message},
                 *[{"type": "image_url", "image_url": {"url": file}} for file in input_files]
             ]
         
@@ -174,7 +166,7 @@ def submit(input_value, chatbot_value):
             current_rounds += 1
             
             # 调用Agent进行流式聊天
-            response_stream = agent.chat_stream(user_message=user_message, temperature=0.7)
+            response_stream = agent.chat_stream(user_message=llm_user_message, temperature=0.7)
             
             # 处理流式响应
             first_output = True
@@ -243,19 +235,19 @@ def submit(input_value, chatbot_value):
             else:
                 # 继续下一轮生成，但不添加新的用户消息到UI中
                 # 为下一轮生成创建新的助手消息
-                chatbot_value.append({"role": "assistant", "loading": True, "status": "pending"})
+                chatbot_value.append(generation_message(loading=True, status="pending"))
                 yield gr.update(loading=True), gr.update(value=chatbot_value)
                 
                 # 下一轮传入空字符串作为用户消息
                 if not response_content:
-                    user_message = (
+                    llm_user_message = (
                         f"Continue completing the original user instruction: {original_user_text}\n"
                         "Strict limits: only perform actions explicitly requested in the original instruction. "
                         "Do not add, delete, move, or modify anything not requested by the original instruction. "
                         "If the original instruction is already complete, reply only: All done."
                     )
                 else:
-                    user_message = (
+                    llm_user_message = (
                         f"Continue completing the original user instruction: {original_user_text}\n"
                         "Strict limits: do not expand the scene and do not add unrequested objects. "
                         "If the original instruction is already complete, reply only: All done."
@@ -305,6 +297,7 @@ def submit_with_view(
     visual_verifier_iterations=2,
 ):
     """处理聊天提交，并在右侧刷新场景信息与渲染预览。"""
+    chatbot_value = chatbot_value or []
     last_input_update = gr.update()
     last_chat_update = gr.update(value=chatbot_value)
     user_goal = (input_value or {}).get("text", "")
@@ -333,12 +326,11 @@ def submit_with_view(
     current_image_path = image_update
 
     for iteration in range(1, max_iterations + 1):
-        chatbot_value.append({
-            "role": "assistant",
-            "content": f"Visual Verifier is checking render {iteration}/{max_iterations}...",
-            "loading": True,
-            "status": "pending",
-        })
+        chatbot_value.append(verifier_message(
+            f"Visual Verifier is checking render {iteration}/{max_iterations}...",
+            loading=True,
+            status="pending",
+        ))
         yield gr.update(loading=True), gr.update(value=chatbot_value), gr.update(), gr.update()
 
         visual_verifier = getattr(agent, "visual_verifier", None)
@@ -457,18 +449,18 @@ def retry(chatbot_value):
             
             # 构建用户消息格式
             if file_content and file_content[0]:
-                user_message = [
+                llm_user_message = [
                     {"type": "text", "text": text_content},
                     *[{"type": "image_url", "image_url": {"url": file}} for file in file_content[0]]
                 ]
             else:
-                user_message = text_content
+                llm_user_message = text_content
         else:
             # 纯文本消息
-            user_message = last_user_message.get("content", "")
+            llm_user_message = last_user_message.get("content", "")
         
         # 调用Agent进行流式聊天
-        response_stream = agent.chat_stream(user_message=user_message, temperature=0.7)
+        response_stream = agent.chat_stream(user_message=llm_user_message, temperature=0.7)
         
         # 处理流式响应
         first_output = True

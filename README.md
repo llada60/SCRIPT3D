@@ -8,7 +8,7 @@ This project is now fully self-contained. It no longer depends on the external
 
 It contains three main parts:
 
-- `src/`, `ui/`, and `app.py`: the agent, LLM providers, and Gradio UI adapted from `LLM-Blender-Agent`.
+- `src/` and `ui/`: the agent, LLM providers, and the single Gradio UI entry point.
 - `blender_addon/` and `addon.py`: the Blender addon entry point, replacing the original Rodin/Hunyuan3D flow with an Infinigen-aware socket server.
 - `third_party/infinigen/`: vendored Infinigen source code and the Blender 4.2 app.
 
@@ -17,9 +17,8 @@ It contains three main parts:
 ```text
 Gosim2026-Paris/
   addon.py                         # Blender addon entry point; loads the Infinigen-aware addon
-  app.py                           # Original LLM-Blender-Agent UI entry point
   src/                             # LLM-Blender-Agent agent / Blender client / LLM providers
-  ui/                              # LLM-Blender-Agent Gradio UI
+  ui/                              # GOSIM HACKATHON BlenderCode3D Gradio UI
   blender_addon/
     gosim_infinigen_agent_addon.py # Blender socket server + scene index + Infinigen tools
   gosim_blender_agent/             # Extra CLI / offline planner / runner

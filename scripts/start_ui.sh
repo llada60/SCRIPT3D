@@ -23,4 +23,4 @@ if ! "$PYTHON_BIN" -c "import gradio" >/dev/null 2>&1; then
   exit 1
 fi
 
-exec "$PYTHON_BIN" app.py
+exec "$PYTHON_BIN" -m ui.main

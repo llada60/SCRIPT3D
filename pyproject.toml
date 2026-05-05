@@ -27,7 +27,7 @@ llm = [
 
 [project.scripts]
 gosim-agent = "gosim_blender_agent.cli:main"
-gosim-agent-ui = "app:fail_safe_main"
+gosim-agent-ui = "ui.main:main"
 
 [tool.ruff]
 line-length = 100
