@@ -132,7 +132,7 @@ def create_chat_tab(session_id_param):
                 model_selector = gr.Dropdown(
                     label="选择LLM模型",
                     choices=available_models,
-                    value="aimlapi" if "aimlapi" in available_models else available_models[0]
+                    value="r9s" if "r9s" in available_models else available_models[0]
                 )
                 
                 # 状态和按钮放在同一行，按钮在右侧
