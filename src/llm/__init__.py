@@ -40,15 +40,20 @@ class LLMFactory:
         Returns:
             LLM实例
         """
-        if model_type not in LLM_MODELS:
-            raise ValueError(f"不支持的LLM类型: {model_type}，支持的类型有: {', '.join(LLM_MODELS.keys())}")
+        provider = config.get("provider", model_type)
+        if provider not in LLM_MODELS:
+            raise ValueError(
+                f"不支持的LLM类型: {model_type}"
+                f"（provider: {provider}），支持的provider有: {', '.join(LLM_MODELS.keys())}；"
+                f"也可以在配置项中设置 provider 为上述类型之一"
+            )
             
-        llm_class = LLM_MODELS[model_type]
+        llm_class = LLM_MODELS[provider]
         api_key = config.get("api_key", "")
         model = config.get("model", "")
         
         # 额外参数
-        kwargs = {k: v for k, v in config.items() if k not in ["api_key", "model"]}
+        kwargs = {k: v for k, v in config.items() if k not in ["api_key", "model", "provider"]}
         
         return llm_class(api_key=api_key, model=model, **kwargs)
     
@@ -79,8 +84,19 @@ class LLMFactory:
             model_type = llm_config.get("default_model", "claude")
             
         if model_type not in llm_config:
-            raise ValueError(f"配置文件中未找到模型类型: {model_type}")
+            alias_model_type = next(
+                (
+                    name
+                    for name, item in llm_config.items()
+                    if isinstance(item, dict) and item.get("provider") == model_type
+                ),
+                None,
+            )
+            if alias_model_type:
+                model_type = alias_model_type
+            else:
+                raise ValueError(f"配置文件中未找到模型类型: {model_type}")
             
         # 创建LLM实例
         model_config = llm_config.get(model_type, {})
-        return LLMFactory.create_llm(model_type, model_config) 
+        return LLMFactory.create_llm(model_type, model_config)
