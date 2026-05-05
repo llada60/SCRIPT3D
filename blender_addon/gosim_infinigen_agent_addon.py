@@ -114,7 +114,7 @@ CATEGORY_ALIASES = {
     "bookcase": ("bookcase", "shelf", "书架"),
     "rug": ("rug", "地毯"),
     "plant": ("plant", "植物", "盆栽"),
-    "apple": ("apple", "苹果"),
+    "apple": ("apple", "苹果", "青苹果", "绿苹果"),
     "blackberry": ("blackberry", "黑莓"),
     "green_coconut": ("green_coconut", "coconutgreen", "green coconut", "青椰子", "椰青"),
     "hairy_coconut": ("hairy_coconut", "coconuthairy", "hairy coconut", "coconut", "毛椰子", "椰子"),
@@ -133,7 +133,27 @@ CATEGORY_ALIASES = {
 
 
 DEFAULT_ASSET_SCALES = {
+    "apple": 0.12,
+    "blackberry": 0.06,
+    "green_coconut": 0.14,
+    "hairy_coconut": 0.14,
+    "durian": 0.12,
+    "pineapple": 0.12,
+    "starfruit": 0.10,
     "strawberry": 0.15,
+    "compositional_fruit": 0.12,
+}
+
+MAX_ASSET_DIMENSIONS = {
+    "apple": 0.24,
+    "blackberry": 0.08,
+    "green_coconut": 0.30,
+    "hairy_coconut": 0.30,
+    "durian": 0.34,
+    "pineapple": 0.42,
+    "starfruit": 0.20,
+    "strawberry": 0.14,
+    "compositional_fruit": 0.34,
 }
 
 PHYSICS_FLOOR_Z = 0.0
@@ -175,6 +195,9 @@ COLOR_ALIASES = {
     "green": "green",
     "绿": "green",
     "绿色": "green",
+    "青": "green",
+    "青色": "green",
+    "青苹果": "green",
     "white": "white",
     "白": "white",
     "白色": "white",
@@ -532,7 +555,7 @@ def _category_from_asset_request(request: str, factory_path: str) -> str:
         ("hairy_coconut", ("fruitfactorycoconuthairy", "hairy_coconut", "coconuthairy", "hairy coconut", "coconut", "毛椰子", "椰子")),
         ("durian", ("fruitfactorydurian", "durian", "榴莲")),
         ("pineapple", ("fruitfactorypineapple", "pineapple", "菠萝", "凤梨")),
-        ("apple", ("fruitfactoryapple", "apple", "苹果")),
+        ("apple", ("fruitfactoryapple", "apple", "苹果", "青苹果", "绿苹果")),
         ("starfruit", ("fruitfactorystarfruit", "starfruit", "star fruit", "杨桃")),
         ("strawberry", ("fruitfactorystrawberry", "strawberry", "草莓")),
         ("compositional_fruit", ("fruitfactorycompositional", "compositional_fruit", "mixed fruit", "组合水果", "复合水果")),
@@ -778,6 +801,29 @@ def _set_asset_location_by_bbox_min(asset: dict[str, Any], new_bbox_min: Vector)
     _move_asset(asset, new_bbox_min - current_min)
 
 
+def _fit_asset_to_max_dimension(
+    asset: dict[str, Any],
+    max_dimension: float | None,
+    *,
+    preserve_bbox_min: Vector | None = None,
+) -> dict[str, Any]:
+    if not max_dimension or max_dimension <= 0:
+        return asset
+    dimensions = Vector(asset["dimensions"])
+    current_max = max(float(dimensions.x), float(dimensions.y), float(dimensions.z))
+    if current_max <= max_dimension or current_max <= 1e-6:
+        return asset
+    factor = max_dimension / current_max
+    for obj in _root_objects_for_asset(asset):
+        obj.scale = obj.scale * factor
+    bpy.context.view_layer.update()
+    resized = _resolve_asset(asset["object_id"])
+    if preserve_bbox_min is not None:
+        _set_asset_location_by_bbox_min(resized, preserve_bbox_min)
+        resized = _resolve_asset(asset["object_id"])
+    return resized
+
+
 def _polygon_world_area(points: list[Vector]) -> float:
     if len(points) < 3:
         return 0.0
@@ -937,6 +983,27 @@ def _apply_physics_rules(target: str | None = None) -> dict[str, Any]:
 
         support = _find_supporting_asset(asset, _build_scene_index()["assets"])
         bbox_min = Vector(asset["bbox_min"])
+        max_dimension = MAX_ASSET_DIMENSIONS.get(str(category))
+        if max_dimension:
+            resized = _fit_asset_to_max_dimension(
+                asset,
+                max_dimension,
+                preserve_bbox_min=bbox_min,
+            )
+            if resized is not asset:
+                new_dimensions = Vector(resized["dimensions"])
+                corrections.append(
+                    {
+                        "object_id": object_id,
+                        "rule": "limit_asset_size",
+                        "category": category,
+                        "max_dimension": max_dimension,
+                        "new_dimensions": [float(v) for v in new_dimensions],
+                    }
+                )
+                asset = resized
+                bbox_min = Vector(asset["bbox_min"])
+
         if bbox_min.z < PHYSICS_FLOOR_Z - PHYSICS_GROUND_EPS:
             _set_asset_location_by_bbox_min(
                 asset,
@@ -1244,8 +1311,16 @@ def _spawn_infinigen_asset(
     for root in root_objects:
         root.scale = root.scale * scale
     bpy.context.view_layer.update()
+    temp_asset = _resolve_asset(asset_id)
+    _set_asset_location_by_bbox_min(temp_asset, location)
+    temp_asset = _resolve_asset(asset_id)
+    max_dimension = MAX_ASSET_DIMENSIONS.get(category)
+    final_asset = _fit_asset_to_max_dimension(
+        temp_asset,
+        max_dimension,
+        preserve_bbox_min=location,
+    )
 
-    final_asset = _resolve_asset(asset_id)
     if material_color:
         mat = _make_material(material_color, None)
         for obj in _objects_for_asset(final_asset):
@@ -1286,6 +1361,7 @@ def _spawn_infinigen_asset(
         "generation_script": script_path,
         "requested_scale": requested_scale,
         "scale": scale,
+        "max_dimension": max_dimension,
         "physics": physics,
     }
 
@@ -1572,15 +1648,19 @@ def cmd_place_near(payload: dict[str, Any]) -> dict[str, Any]:
     target_min = Vector(target["bbox_min"])
     target_max = Vector(target["bbox_max"])
     target_center = Vector(target["center"])
+    placement_z = target_min.z
+    target_support = _find_supporting_asset(target, _build_scene_index()["assets"])
+    if target_support is not None:
+        placement_z = target["bbox_min"][2]
 
     if side == "left":
-        new_min = Vector((target_min.x - source_dims.x - gap, target_center.y - source_dims.y / 2, target_min.z))
+        new_min = Vector((target_min.x - source_dims.x - gap, target_center.y - source_dims.y / 2, placement_z))
     elif side == "front":
-        new_min = Vector((target_center.x - source_dims.x / 2, target_min.y - source_dims.y - gap, target_min.z))
+        new_min = Vector((target_center.x - source_dims.x / 2, target_min.y - source_dims.y - gap, placement_z))
     elif side == "back":
-        new_min = Vector((target_center.x - source_dims.x / 2, target_max.y + gap, target_min.z))
+        new_min = Vector((target_center.x - source_dims.x / 2, target_max.y + gap, placement_z))
     else:
-        new_min = Vector((target_max.x + gap, target_center.y - source_dims.y / 2, target_min.z))
+        new_min = Vector((target_max.x + gap, target_center.y - source_dims.y / 2, placement_z))
 
     _set_asset_location_by_bbox_min(source, new_min)
     physics = _apply_physics_rules(source["object_id"])
@@ -1588,6 +1668,8 @@ def cmd_place_near(payload: dict[str, Any]) -> dict[str, Any]:
         "message": f"Placed {source['name']} near {target['name']} on {side}",
         "source_id": source["object_id"],
         "target_id": target["object_id"],
+        "placement_z": float(placement_z),
+        "target_support_id": target_support["object_id"] if target_support else None,
         "physics": physics,
     }
 
@@ -1623,6 +1705,47 @@ def cmd_apply_physics_rules(payload: dict[str, Any]) -> dict[str, Any]:
     return _apply_physics_rules(payload.get("target"))
 
 
+def cmd_adjust_existing_light(payload: dict[str, Any]) -> dict[str, Any]:
+    target = payload.get("target")
+    light_ref = payload.get("light") or payload.get("light_name")
+    light = _resolve_light(str(light_ref) if light_ref else None)
+    subjects = _camera_agent_subject_objects(str(target) if target else None)
+    bbox_min, bbox_max, center = _subject_bounds(subjects)
+    dimensions = bbox_max - bbox_min
+    span = max(1.0, float(max(dimensions.x, dimensions.y, dimensions.z)))
+
+    camera = _ensure_camera()
+    horizontal = camera.location - center
+    horizontal.z = 0.0
+    if horizontal.length <= 1e-6:
+        horizontal = Vector((0.0, -1.0, 0.0))
+    horizontal.normalize()
+
+    height = float(payload.get("height", max(2.0, span * 1.4)))
+    distance = float(payload.get("distance", max(1.2, span * 0.8)))
+    new_location = center + horizontal * distance + Vector((0.0, 0.0, height))
+    light.location = new_location
+
+    if light.data:
+        min_energy = float(payload.get("min_energy", 900.0))
+        if hasattr(light.data, "energy"):
+            light.data.energy = max(float(getattr(light.data, "energy", 0.0)), min_energy)
+        if getattr(light.data, "type", "") == "AREA" and hasattr(light.data, "size"):
+            light.data.size = max(float(getattr(light.data, "size", 1.0)), span * 0.9)
+
+    _look_at(light, center)
+    bpy.context.view_layer.update()
+    return {
+        "message": f"Adjusted existing Light {light.name} for scene visibility",
+        "light": light.name,
+        "target": target,
+        "location": [float(v) for v in light.location],
+        "rotation_euler": [float(v) for v in light.rotation_euler],
+        "energy": float(getattr(light.data, "energy", 0.0)) if light.data and hasattr(light.data, "energy") else None,
+        "created_new_light": False,
+    }
+
+
 def _ensure_camera() -> bpy.types.Object:
     if bpy.context.scene.camera:
         return bpy.context.scene.camera
@@ -1656,6 +1779,35 @@ def _camera_agent_subject_objects(target: str | None) -> list[bpy.types.Object]:
 def _subject_center(subjects: list[bpy.types.Object]) -> Vector:
     bbox_min, bbox_max = _bounds_for_objects(subjects)
     return (bbox_min + bbox_max) * 0.5
+
+
+def _subject_bounds(subjects: list[bpy.types.Object]) -> tuple[Vector, Vector, Vector]:
+    bbox_min, bbox_max = _bounds_for_objects(subjects)
+    center = (bbox_min + bbox_max) * 0.5
+    return bbox_min, bbox_max, center
+
+
+def _existing_lights() -> list[bpy.types.Object]:
+    return [
+        obj
+        for obj in bpy.context.scene.objects
+        if obj.type == "LIGHT" and not obj.hide_get() and not obj.hide_render
+    ]
+
+
+def _resolve_light(ref: str | None = None) -> bpy.types.Object:
+    lights = _existing_lights()
+    if not lights:
+        raise RuntimeError("No existing Light found in the scene")
+    if ref:
+        lowered = str(ref).lower()
+        for light in lights:
+            if lowered in light.name.lower() or lowered == str(light.get("gosim_object_id", "")).lower():
+                return light
+    active = bpy.context.view_layer.objects.active
+    if active and active.type == "LIGHT" and active in lights:
+        return active
+    return lights[0]
 
 
 def _look_at(camera: bpy.types.Object, target: Vector) -> None:
@@ -1803,6 +1955,13 @@ def _alpha_bbox_from_image(path: Path, alpha_threshold: float = 0.02) -> dict[st
         bpy.data.images.remove(image)
 
 
+def _try_alpha_bbox_from_image(path: Path, alpha_threshold: float = 0.02) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        return _alpha_bbox_from_image(path, alpha_threshold), None
+    except Exception as exc:
+        return None, str(exc)
+
+
 def _move_camera_from_bbox(
     camera: bpy.types.Object,
     bbox: dict[str, Any],
@@ -1882,9 +2041,12 @@ def cmd_adjust_camera_from_render(payload: dict[str, Any]) -> dict[str, Any]:
     mask_path = output_path_obj.with_name(f"{output_path_obj.stem}_mask.png")
     steps: list[dict[str, Any]] = []
     subject_center = _subject_center(subjects)
+    mask_error = None
     for _ in range(max_iterations):
         _render_camera_mask(mask_path, (resolution[0], resolution[1]), subjects)
-        bbox = _alpha_bbox_from_image(mask_path)
+        bbox, mask_error = _try_alpha_bbox_from_image(mask_path)
+        if bbox is None:
+            break
         movement = _move_camera_from_bbox(
             camera,
             bbox,
@@ -1898,6 +2060,9 @@ def cmd_adjust_camera_from_render(payload: dict[str, Any]) -> dict[str, Any]:
         framed = abs(movement["fill"] - target_fill) <= tolerance
         if centered and framed:
             break
+
+    if mask_error and not steps:
+        print(f"[GOSIM] Camera agent warning: {mask_error}; rendering without mask-based refinement")
 
     render_result = cmd_render_scene(
         {
@@ -1917,6 +2082,7 @@ def cmd_adjust_camera_from_render(payload: dict[str, Any]) -> dict[str, Any]:
         "fit": fit_result,
         "final_quality": _camera_view_quality(subjects),
         "mask_path": str(mask_path),
+        "mask_error": mask_error,
         "render": render_result,
         "steps": steps,
     }
@@ -1949,20 +2115,26 @@ def cmd_render_scene(payload: dict[str, Any]) -> dict[str, Any]:
                 mask_path = path_obj.with_name(f"{path_obj.stem}_camera_check_mask.png")
                 steps: list[dict[str, Any]] = []
                 subject_center = _subject_center(subjects)
+                mask_error = None
                 for _ in range(max(1, min(4, int(payload.get("camera_max_iterations", 3))))):
                     _render_camera_mask(mask_path, (768, 432), subjects)
-                    bbox = _alpha_bbox_from_image(mask_path)
+                    bbox, mask_error = _try_alpha_bbox_from_image(mask_path)
+                    if bbox is None:
+                        break
                     movement = _move_camera_from_bbox(camera, bbox, subject_center, target_fill, 0.75, 0.65)
                     steps.append({"bbox": bbox, "camera_movement": movement})
                     quality_after_step = _camera_view_quality(subjects)
                     if quality_after_step.get("good"):
                         break
+                if mask_error:
+                    print(f"[GOSIM] Camera auto-adjust warning: {mask_error}; continuing render")
                 camera_adjustment = {
                     "adjusted": True,
                     "before": quality,
                     "fit": fit_result,
                     "after": _camera_view_quality(subjects),
                     "mask_path": str(mask_path),
+                    "mask_error": mask_error,
                     "steps": steps,
                 }
             else:
@@ -2000,6 +2172,7 @@ COMMANDS = {
     "place_near": cmd_place_near,
     "place_against_wall": cmd_place_against_wall,
     "apply_physics_rules": cmd_apply_physics_rules,
+    "adjust_existing_light": cmd_adjust_existing_light,
     "adjust_camera_from_render": cmd_adjust_camera_from_render,
     "render_scene": cmd_render_scene,
 }

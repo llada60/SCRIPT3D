@@ -14,12 +14,14 @@
   "llm": {
     "default_model": "r9s",
     "r9s_visual_verifier": {
-      "api_key": "",
+      "provider": "r9s",
+      "api_key": "sk-MFgyIIGWHLQM2Zw25cBcB91fDa404eCf8dB7BdD2D65966B7",
       "model": "claude-opus-4-6",
       "api_base": "https://api.r9s.ai/v1"
     },
     "r9s_code": {
-      "api_key": "",
+      "provider": "r9s",
+      "api_key": "sk-MFgyIIGWHLQM2Zw25cBcB91fDa404eCf8dB7BdD2D65966B7",
       "model": "deepseek-v4-pro",
       "api_base": "https://api.r9s.ai/v1"
     },

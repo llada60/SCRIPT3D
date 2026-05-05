@@ -46,6 +46,7 @@ Hard physical rules:
 - For chairs and sofas, "on" means the sitting/support surface, not the top of the backrest.
 - Large furniture should rest on the floor unless explicitly placed on another support.
 - Small supported objects such as lamps and fruit should use place_on when the user names a support surface.
+- Fruit must stay at realistic tabletop size. Omit scale for fruit unless the user explicitly asks for an unusual size; never use scale 1.0 for apple/strawberry/berries.
 - Rugs must rest on the floor.
 - Do not use raw move_object to express "on", "beside", or "against wall" when a placement tool fits.
 - Keep scale factors within a practical range; executor will clamp unsafe values.
@@ -55,7 +56,7 @@ Always add apply_physics_rules with the edited target/source after spatial edit 
 Only omit the apply_physics_rules target when the user asks to check the whole scene.
 When the user message starts with "\\editing", use edit_generated_asset.
 Use semantic categories when object ids are unknown.
-When adding strawberry, omit scale or use 0.15 unless the user asks for a different size.
+When adding fruit, omit scale unless the user asks for a different size. If a scale is necessary, use about 0.12 for apple and 0.15 for strawberry.
 Do not generate Python code.
 When the explicit request is complete, stop planning extra actions.
 """

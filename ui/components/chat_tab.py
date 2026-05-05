@@ -186,8 +186,8 @@ def create_chat_tab(session_id_param):
                     with gr.Row():
                         enable_visual_verifier = gr.Checkbox(
                             label="启用 Visual Verifier",
-                            value=False,
-                            info="选中后，每次自动渲染后会让视觉 verifier 检查结果，并把调整指令交给 Agent 继续编辑。",
+                            value=True,
+                            info="选中后，每次自动渲染后只检查 prompt 一致性、物理常识和生活习惯，并把必要调整交给 Agent。",
                         )
                         visual_verifier_iterations = gr.Slider(
                             label="Visual Verifier 最大迭代次数",

@@ -93,37 +93,44 @@ ASSET_SPECS: tuple[AssetSpec, ...] = (
     AssetSpec(
         "apple",
         "infinigen.assets.objects.fruits.FruitFactoryApple",
-        ("apple", "苹果"),
+        ("apple", "苹果", "青苹果", "绿苹果"),
+        default_scale=0.12,
     ),
     AssetSpec(
         "blackberry",
         "infinigen.assets.objects.fruits.FruitFactoryBlackberry",
         ("blackberry", "黑莓"),
+        default_scale=0.06,
     ),
     AssetSpec(
         "green_coconut",
         "infinigen.assets.objects.fruits.FruitFactoryCoconutgreen",
         ("green coconut", "coconutgreen", "青椰子", "椰青"),
+        default_scale=0.14,
     ),
     AssetSpec(
         "hairy_coconut",
         "infinigen.assets.objects.fruits.FruitFactoryCoconuthairy",
         ("hairy coconut", "coconuthairy", "coconut", "毛椰子", "椰子"),
+        default_scale=0.14,
     ),
     AssetSpec(
         "durian",
         "infinigen.assets.objects.fruits.FruitFactoryDurian",
         ("durian", "榴莲"),
+        default_scale=0.12,
     ),
     AssetSpec(
         "pineapple",
         "infinigen.assets.objects.fruits.FruitFactoryPineapple",
         ("pineapple", "菠萝", "凤梨"),
+        default_scale=0.12,
     ),
     AssetSpec(
         "starfruit",
         "infinigen.assets.objects.fruits.FruitFactoryStarfruit",
         ("starfruit", "star fruit", "杨桃"),
+        default_scale=0.10,
     ),
     AssetSpec(
         "strawberry",
@@ -135,6 +142,7 @@ ASSET_SPECS: tuple[AssetSpec, ...] = (
         "compositional_fruit",
         "infinigen.assets.objects.fruits.FruitFactoryCompositional",
         ("compositional fruit", "mixed fruit", "组合水果", "复合水果"),
+        default_scale=0.12,
     ),
 )
 

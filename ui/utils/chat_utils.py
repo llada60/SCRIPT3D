@@ -369,8 +369,12 @@ def submit_with_view(
 
         generator_instruction = (
             "Visual verifier 根据最新 render 提出如下调整。"
-            "请只使用 Blender 工具函数修改物体、camera、lighting 或相关参数；"
+            "请只使用 Blender 工具函数修正 prompt 一致性、物理常识或生活习惯问题；"
+            "如果渲染太暗或相机太远导致无法验证，可以移动/调整已有 Light 或已有 Camera，但不要新增光源或未要求物体；"
+            "不要为了主观美化去优化光照、相机、构图、材质或渲染效果；"
+            "必须继续遵守用户原始目标，不要新增未被用户原始目标或 verifier 指令明确要求的物体；"
             "完成后返回全部完成。\n"
+            f"用户原始目标：{user_goal}\n"
             f"{instruction}"
         )
         for input_update, chat_update in submit({"text": generator_instruction, "files": []}, chatbot_value):

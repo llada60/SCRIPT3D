@@ -30,10 +30,10 @@ PHYSICAL_RULES_PROMPT = """你是 Blender/Infinigen 场景编辑 planner。
 - 把cube删掉
 - 严格按照用户当前指令执行，只做用户明确要求的动作。
 - 不要乱加东西；不要为了“更自然”“更丰富”“更好看”添加、移动、删除或修改用户没有要求的物体。
-- 如果用户只要求添加草莓并放到椅子上，就只添加草莓、放到椅子的承托面上，并执行必要的物理/索引更新；不要添加桌子或其他家具。
+- 如果用户只要求添加草莓并放到椅子上，就只添加/移动指令中明确提到的草莓和椅子相关对象，并执行必要的物理/索引更新；不要添加桌子或其他未提到的家具。
 - 符合物理常识，例如：家具通常放在地面上
 - 水果比家具小，地毯比家具大但很薄，灯具需要支撑面。
-- 
+- 苹果、草莓、黑莓等水果必须保持真实桌面物件大小；除非用户明确要求巨大水果，否则不要给水果使用 1.0 这类家具级 scale。
 - 不要让对象悬空；空间编辑后对被编辑对象调用 apply_physics_rules，再调用 rebuild_scene_index。
 - 表达“放到上面”时优先用 place_on，不要用裸 move_object。
 - 对椅子/沙发表达“放在上面”时，目标是坐垫/承托面，不是椅背或靠背顶部。
@@ -49,7 +49,7 @@ PHYSICAL_RULES_PROMPT = """你是 Blender/Infinigen 场景编辑 planner。
 ASSET_REQUEST_ALIASES = {
     "bed": ("bed", "床"),
     "desk": ("desk", "书桌", "桌子", "办公桌"),
-    "table": ("table", "餐桌"),
+    "table": ("table", "桌", "桌子", "餐桌"),
     "side_table": ("side_table", "床头柜", "边几", "nightstand"),
     "desk_lamp": ("desk_lamp", "lamp", "台灯", "灯"),
     "chair": ("chair", "椅子", "座椅"),
@@ -58,7 +58,7 @@ ASSET_REQUEST_ALIASES = {
     "bookcase": ("bookcase", "书架"),
     "rug": ("rug", "地毯"),
     "plant": ("plant", "植物", "盆栽"),
-    "apple": ("apple", "苹果"),
+    "apple": ("apple", "苹果", "青苹果", "绿苹果"),
     "blackberry": ("blackberry", "黑莓"),
     "green_coconut": ("green_coconut", "coconutgreen", "青椰子", "椰青"),
     "hairy_coconut": ("hairy_coconut", "coconuthairy", "椰子", "毛椰子"),
@@ -148,7 +148,7 @@ class BlenderAgent:
                     },
                     "seed": {"type": "integer", "description": "随机种子，可选。"},
                     "location": {"type": "array", "description": "放置位置 [x, y, z]，可选。"},
-                    "scale": {"type": "number", "description": "整体缩放，可选；草莓默认 0.15，其他资产默认 1.0。"},
+                    "scale": {"type": "number", "description": "整体缩放，可选；水果已有小尺寸默认值，例如苹果约 0.12、草莓约 0.15，除非用户明确要求不要传 1.0。"},
                 },
                 "required": ["category_or_factory"],
             },
@@ -293,6 +293,18 @@ class BlenderAgent:
                 },
                 "required": [],
             },
+            {
+                "name": "adjust_existing_light",
+                "description": "移动并增强场景中已有的 Blender Light，使 prompt 相关物体可辨认；不会新增光源。仅在渲染太暗、物体看不清、Verifier 明确要求调整已有 Light，或用户要求调整光照时使用。",
+                "parameters": {
+                    "target": {"type": "string", "description": "需要照亮的目标对象/类别/自然语言描述；不填则使用所有非结构资产。"},
+                    "light": {"type": "string", "description": "已有 Light 名称，可选；不填则使用场景中的已有 Light。"},
+                    "min_energy": {"type": "number", "description": "已有 Light 的最低能量，默认 900。"},
+                    "height": {"type": "number", "description": "相对目标中心向上的高度，可选。"},
+                    "distance": {"type": "number", "description": "相对目标中心沿相机方向的水平距离，可选。"},
+                },
+                "required": [],
+            },
         ]
 
     def add_message(self, role: str, content: Union[str, List[Dict[str, Any]]]):
@@ -336,24 +348,12 @@ class BlenderAgent:
                 return category
         return text
 
-    def _requested_asset_categories(self) -> set[str]:
+    def _mentioned_asset_categories(self) -> set[str]:
         text = self.current_user_request_text.lower()
-        addition_matches = list(
-            re.finditer(
-                r"(添加|新增|创建|生成|加|add|create|generate)\s*(?P<items>[^，。,.;]*?)(?=放到|放在|放上|放|$)",
-                text,
-                re.IGNORECASE,
-            )
-        )
-        if not addition_matches:
-            return set()
-
         requested: set[str] = set()
-        for match in addition_matches:
-            item_text = match.group("items")
-            for category, aliases in ASSET_REQUEST_ALIASES.items():
-                if category in item_text or any(str(alias).lower() in item_text for alias in aliases):
-                    requested.add(category)
+        for category, aliases in ASSET_REQUEST_ALIASES.items():
+            if category in text or any(str(alias).lower() in text for alias in aliases):
+                requested.add(category)
         return requested
 
     def _validate_function_call_against_request(self, function_call: Dict[str, Any]) -> Dict[str, Any] | None:
@@ -364,7 +364,7 @@ class BlenderAgent:
         category = self._category_from_asset_request(
             arguments.get("category_or_factory") or arguments.get("category")
         )
-        requested = self._requested_asset_categories()
+        requested = self._mentioned_asset_categories()
         if category in requested:
             return None
 

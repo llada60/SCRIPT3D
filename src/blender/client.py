@@ -249,6 +249,25 @@ class BlenderClient:
             params["target"] = target
         return self.send_command("apply_physics_rules", params)
 
+    def adjust_existing_light(
+        self,
+        target: Optional[str] = None,
+        light: Optional[str] = None,
+        min_energy: float = 900.0,
+        height: Optional[float] = None,
+        distance: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {"min_energy": min_energy}
+        if target:
+            params["target"] = target
+        if light:
+            params["light"] = light
+        if height is not None:
+            params["height"] = height
+        if distance is not None:
+            params["distance"] = distance
+        return self.send_command("adjust_existing_light", params)
+
     def adjust_camera_from_render(
         self,
         target: Optional[str] = None,
