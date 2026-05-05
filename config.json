@@ -3,11 +3,24 @@
     "host": "localhost",
     "port": 9876
   },
+  "agents": {
+    "code_generator": {
+      "model_type": "r9s_code"
+    },
+    "visual_verifier": {
+      "model_type": "r9s_visual_verifier"
+    }
+  },
   "llm": {
     "default_model": "r9s",
-    "r9s": {
-      "api_key": "sk-PMCS6gY8GKhfCd3hD8710070EbC64e29942e623b3317182f",
+    "r9s_visual_verifier": {
+      "api_key": "",
       "model": "claude-opus-4-6",
+      "api_base": "https://api.r9s.ai/v1"
+    },
+    "r9s_code": {
+      "api_key": "",
+      "model": "deepseek-v4-pro",
       "api_base": "https://api.r9s.ai/v1"
     },
     "claude": {
@@ -39,4 +52,4 @@
       "model": "gpt-4o"
     }
   }
-} 
+}

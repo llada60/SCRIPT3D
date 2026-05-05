@@ -94,6 +94,10 @@ UI 沿用 LLM-Blender-Agent 的连接、模型选择、聊天、渲染预览流�
 - Agent 的文本回复、函数调用提示和工具执行结果都会触发 UI 刷新，减少流式输出或工具输出不显示的问题。
 - 长文本、JSON、代码块会自动换行或横向滚动，避免在窄窗口中撑破布局。
 - 响应式布局已适配不同浏览器宽度：桌面端保留右侧场景/渲染面板，小屏下消息气泡会自动放宽到可读宽度。
+- 初始化区分成两个 agent 模型选择：Code Generator 负责调用 Blender 工具编辑场景，Visual Verifier 负责读取 render 图并生成下一轮调整指令。
+- 高级设置新增可选的 Visual Verifier 闭环：勾选“启用 Visual Verifier”后，每次用户指令完成并自动渲染后，系统会把 render 图片、用户目标和当前场景信息交给独立的 verifier agent 判断。
+- “Visual Verifier 最大迭代次数”控制 verifier + Blender editing 的最多循环次数；如果 verifier 判断结果已经差不多，会提前结束。
+- 当 verifier 认为还需要调整时，它会生成一段给 code generator 的中文 text instruction，要求继续调整物体、camera、lighting、缩放、旋转、材质或构图参数；随后 Agent 会用现有 Blender 工具执行编辑并重新渲染。
 
 ## 当前 Agent 工具
 
@@ -138,6 +142,41 @@ LLM 可以调用：
 - `max_iterations`：根据 render 结果迭代调整 camera 的次数，默认 `3`。
 - `output_path`：最终预览图输出路径；不填则保存到当前 blend 目录的 `renders/camera_agent_preview.png`。
 - `render_scene` 额外支持 `auto_adjust_camera`、`camera_target`、`camera_target_fill`；默认 `auto_adjust_camera=true`。
+
+### Visual Verifier agent
+
+Visual Verifier 是独立 agent，不新增 Blender socket 命令。配置文件用 `agents.code_generator` 和 `agents.visual_verifier` 分别指定两套 API 调用使用的 LLM 类型：
+
+```json
+{
+  "agents": {
+    "code_generator": {
+      "model_type": "r9s"
+    },
+    "visual_verifier": {
+      "model_type": "r9s"
+    }
+  }
+}
+```
+
+UI 初始化时也可以分别选择 Code Generator 模型和 Visual Verifier 模型。Verifier 输入包括：
+
+- 自动渲染得到的图片路径。
+- 用户原始自然语言目标。
+- 最新场景信息文本。
+
+Verifier 只负责判断 render 是否接近目标，并输出结构化结果：
+
+```json
+{
+  "done": false,
+  "reason": "主体偏左且灯光偏暗",
+  "instruction": "把 camera 向右平移一点并增加主灯亮度，让桌子和台灯位于画面中心。"
+}
+```
+
+如果 `done=true`，闭环提前结束；如果 `done=false`，`instruction` 会作为下一轮 Code Generator agent 输入，Code Generator 会继续调用现有工具编辑 Blender 场景，然后重新 render 并再次交给 Visual Verifier。循环次数由 UI 中的“Visual Verifier 最大迭代次数”控制。
 
 ## 示例指令
 

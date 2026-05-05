@@ -245,10 +245,18 @@ def _refresh_right_view(auto_update_info=True, auto_render=True):
     return scene_update, image_update
 
 
-def submit_with_view(input_value, chatbot_value, auto_update_info=True, auto_render=True):
+def submit_with_view(
+    input_value,
+    chatbot_value,
+    auto_update_info=True,
+    auto_render=True,
+    enable_visual_verifier=False,
+    visual_verifier_iterations=2,
+):
     """处理聊天提交，并在右侧刷新场景信息与渲染预览。"""
     last_input_update = gr.update()
     last_chat_update = gr.update(value=chatbot_value)
+    user_goal = (input_value or {}).get("text", "")
 
     for input_update, chat_update in submit(input_value, chatbot_value):
         last_input_update = input_update
@@ -257,6 +265,75 @@ def submit_with_view(input_value, chatbot_value, auto_update_info=True, auto_ren
 
     scene_update, image_update = _refresh_right_view(auto_update_info, auto_render)
     yield last_input_update, last_chat_update, scene_update, image_update
+
+    if not enable_visual_verifier or not auto_render or not isinstance(image_update, str):
+        return
+
+    agent = get_agent()
+    if agent is None:
+        return
+
+    try:
+        max_iterations = max(1, min(5, int(visual_verifier_iterations or 1)))
+    except (TypeError, ValueError):
+        max_iterations = 2
+
+    current_scene_text = scene_update if isinstance(scene_update, str) else ""
+    current_image_path = image_update
+
+    for iteration in range(1, max_iterations + 1):
+        chatbot_value.append({
+            "role": "assistant",
+            "content": f"Visual Verifier 正在检查第 {iteration}/{max_iterations} 次渲染...",
+            "loading": True,
+            "status": "pending",
+        })
+        yield gr.update(loading=True), gr.update(value=chatbot_value), gr.update(), gr.update()
+
+        visual_verifier = getattr(agent, "visual_verifier", None)
+        if visual_verifier is None:
+            chatbot_value[-1]["content"] = "Visual Verifier 未初始化，请重新初始化 Agent。"
+            chatbot_value[-1]["loading"] = False
+            chatbot_value[-1]["status"] = "done"
+            yield gr.update(loading=False), gr.update(value=chatbot_value), gr.update(), gr.update()
+            break
+
+        verdict = visual_verifier.verify(user_goal, current_image_path, current_scene_text)
+        reason = verdict.reason or "未提供原因"
+        instruction = verdict.instruction or ""
+        if verdict.done:
+            chatbot_value[-1]["content"] = f"Visual Verifier：结果已可接受。原因：{reason}"
+            chatbot_value[-1]["loading"] = False
+            chatbot_value[-1]["status"] = "done"
+            yield gr.update(loading=False), gr.update(value=chatbot_value), gr.update(), gr.update()
+            break
+
+        chatbot_value[-1]["content"] = (
+            f"Visual Verifier：需要继续调整。原因：{reason}\n\n"
+            f"给 code generator 的指令：{instruction}"
+        )
+        chatbot_value[-1]["loading"] = False
+        chatbot_value[-1]["status"] = "done"
+        yield gr.update(loading=False), gr.update(value=chatbot_value), gr.update(), gr.update()
+
+        generator_instruction = (
+            "Visual verifier 根据最新 render 提出如下调整。"
+            "请只使用 Blender 工具函数修改物体、camera、lighting 或相关参数；"
+            "完成后返回全部完成。\n"
+            f"{instruction}"
+        )
+        for input_update, chat_update in submit({"text": generator_instruction, "files": []}, chatbot_value):
+            last_input_update = input_update
+            last_chat_update = chat_update
+            yield input_update, chat_update, gr.update(), gr.update()
+
+        scene_update, image_update = _refresh_right_view(auto_update_info, auto_render)
+        yield last_input_update, last_chat_update, scene_update, image_update
+
+        if not isinstance(image_update, str):
+            break
+        current_scene_text = scene_update if isinstance(scene_update, str) else current_scene_text
+        current_image_path = image_update
 
 
 def cancel(chatbot_value):

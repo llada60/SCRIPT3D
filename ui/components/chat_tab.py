@@ -38,7 +38,7 @@ import modelscope_studio.components.pro as pro
 
 from ui.utils.blender_utils import get_scene_info, render_scene_and_return_image, connect_to_blender
 from ui.utils.chat_utils import submit_with_view, cancel, clear
-from ui.utils.llm_utils import load_config, get_available_models
+from ui.utils.llm_utils import load_config, get_available_models, get_configured_agent_model
 
 from modelscope_studio.components.pro.chatbot import (
     ChatbotDataMessage, ChatbotDataMessageContent,
@@ -94,6 +94,16 @@ def create_chat_tab(session_id_param):
     # 从配置中获取可用模型
     config = load_config()
     available_models = get_available_models(config)
+    default_code_generator_model = get_configured_agent_model(
+        config,
+        "code_generator",
+        fallback="r9s" if "r9s" in available_models else available_models[0],
+    )
+    default_visual_verifier_model = get_configured_agent_model(
+        config,
+        "visual_verifier",
+        fallback=default_code_generator_model,
+    )
     
     with ms.Application(), antdx.XProvider():
         # 步骤1和步骤2放在整行
@@ -129,11 +139,21 @@ def create_chat_tab(session_id_param):
             
             with gr.Column(scale=1, elem_classes=["setup-card"]):
                 gr.Markdown("## 步骤2: 初始化LLM模型")
-                model_selector = gr.Dropdown(
-                    label="选择LLM模型",
-                    choices=available_models,
-                    value="r9s" if "r9s" in available_models else available_models[0]
-                )
+                with gr.Row():
+                    model_selector = gr.Dropdown(
+                        label="Code Generator模型",
+                        choices=available_models,
+                        value=default_code_generator_model
+                        if default_code_generator_model in available_models
+                        else available_models[0],
+                    )
+                    verifier_model_selector = gr.Dropdown(
+                        label="Visual Verifier模型",
+                        choices=available_models,
+                        value=default_visual_verifier_model
+                        if default_visual_verifier_model in available_models
+                        else available_models[0],
+                    )
                 
                 # 状态和按钮放在同一行，按钮在右侧
                 with gr.Row(elem_classes=["secondary-actions"]):
@@ -162,6 +182,21 @@ def create_chat_tab(session_id_param):
                         value=True,  # 默认勾选
                         info="选中时，会将当前场景信息加入到LLM的上下文中，以便更好地理解场景状态"
                     )
+
+                    with gr.Row():
+                        enable_visual_verifier = gr.Checkbox(
+                            label="启用 Visual Verifier",
+                            value=False,
+                            info="选中后，每次自动渲染后会让视觉 verifier 检查结果，并把调整指令交给 Agent 继续编辑。",
+                        )
+                        visual_verifier_iterations = gr.Slider(
+                            label="Visual Verifier 最大迭代次数",
+                            minimum=1,
+                            maximum=5,
+                            step=1,
+                            value=2,
+                            info="Verifier 认为渲染结果已接近目标时会提前结束。",
+                        )
                     
                     close_advanced_settings_btn = gr.Button("关闭")
                 
@@ -232,12 +267,12 @@ def create_chat_tab(session_id_param):
         )
         
         # 初始化按钮事件
-        def init_and_update_functions(model):
+        def init_and_update_functions(model, verifier_model):
             from ui.utils.llm_utils import initialize_agent, format_functions_for_display
             
             # 使用默认温度0.7
             temp = 0.7
-            result = initialize_agent(globals.session_id, model, temp)
+            result = initialize_agent(globals.session_id, model, temp, verifier_model)
             
             # 更新可用函数列表
             formatted_functions = ["all"] + format_functions_for_display(globals.session_id, globals.agents)
@@ -246,7 +281,7 @@ def create_chat_tab(session_id_param):
         
         initialize_btn.click(
             fn=init_and_update_functions,
-            inputs=[model_selector],
+            inputs=[model_selector, verifier_model_selector],
             outputs=[initialization_status, function_checkboxes]
         )
         
@@ -286,7 +321,14 @@ def create_chat_tab(session_id_param):
 
         submit_event = chat_input.submit(
             fn=submit_with_view,
-            inputs=[chat_input, chatbot, auto_update_info, auto_render],
+            inputs=[
+                chat_input,
+                chatbot,
+                auto_update_info,
+                auto_render,
+                enable_visual_verifier,
+                visual_verifier_iterations,
+            ],
             outputs=[chat_input, chatbot, scene_info, render_image],
         )
 
@@ -308,12 +350,15 @@ def create_chat_tab(session_id_param):
             "function_checkboxes": function_checkboxes,
             "auto_update_info": auto_update_info,
             "auto_render": auto_render,
+            "enable_visual_verifier": enable_visual_verifier,
+            "visual_verifier_iterations": visual_verifier_iterations,
             "include_in_context": include_in_context,
             "scene_info": scene_info,
             "render_image": render_image,
             "connect_btn": connect_btn, 
             "connection_status": connection_status,
             "model_selector": model_selector,
+            "verifier_model_selector": verifier_model_selector,
             "initialize_btn": initialize_btn,
             "initialization_status": initialization_status,
             "help_btn": help_btn,  # 添加帮助按钮

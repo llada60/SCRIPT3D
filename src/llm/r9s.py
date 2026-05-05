@@ -1,7 +1,9 @@
 """
 R9S API实现
 """
+import base64
 import json
+import os
 from typing import Dict, List, Any, Optional
 from openai import OpenAI
 
@@ -98,12 +100,43 @@ class R9SLLM(BaseLLM):
         formatted_messages = []
 
         for msg in messages:
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                content = self._format_multimodal_content(content)
             formatted_messages.append({
                 "role": msg.get("role", "user"),
-                "content": msg.get("content", "")
+                "content": content
             })
 
         return formatted_messages
+
+    def _format_multimodal_content(self, content: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        formatted_content = []
+        for item in content:
+            if item.get("type") == "text":
+                formatted_content.append({"type": "text", "text": item.get("text", "")})
+            elif item.get("type") == "image_url":
+                image_url = (item.get("image_url") or {}).get("url", "")
+                if image_url and os.path.exists(image_url):
+                    media_type = self._get_media_type(image_url)
+                    image_url = f"data:{media_type};base64,{self._encode_image(image_url)}"
+                if image_url:
+                    formatted_content.append({"type": "image_url", "image_url": {"url": image_url}})
+        return formatted_content
+
+    @staticmethod
+    def _encode_image(image_path: str) -> str:
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode("utf-8")
+
+    @staticmethod
+    def _get_media_type(image_path: str) -> str:
+        ext = os.path.splitext(image_path)[1].lower()
+        if ext in {".jpg", ".jpeg"}:
+            return "image/jpeg"
+        if ext == ".webp":
+            return "image/webp"
+        return "image/png"
 
     def format_functions(self, functions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """将统一格式的函数定义转换为R9S兼容的OpenAI格式"""

@@ -103,11 +103,14 @@ CUSTOM_CSS = """
 }
 
 .chat-panel {
-    padding: 8px 0 0;
+    padding: 14px;
     overflow: hidden;
-    background: transparent;
-    border: 0;
-    box-shadow: none;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    background: rgba(24, 27, 31, 0.48);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(18px) saturate(125%);
+    -webkit-backdrop-filter: blur(18px) saturate(125%);
 }
 
 .workspace-grid {
@@ -195,7 +198,7 @@ CUSTOM_CSS = """
 .gosim-chatbot [class*="user"] [class*="content"],
 .gosim-chatbot [data-role="user"] {
     margin-left: auto;
-    background: #2f6f57 !important;
+    background: rgba(56, 158, 114, 0.74) !important;
     border: 0 !important;
     color: #f7fffb !important;
 }
@@ -206,7 +209,7 @@ CUSTOM_CSS = """
 .gosim-chatbot [class*="assistant"] [class*="content"],
 .gosim-chatbot [data-role="assistant"] {
     margin-right: auto;
-    background: #22272f !important;
+    background: rgba(34, 39, 47, 0.68) !important;
     border: 0 !important;
     color: #edf2f8 !important;
 }
@@ -233,7 +236,7 @@ CUSTOM_CSS = """
     overflow-x: auto;
     white-space: pre-wrap;
     border: 0 !important;
-    background: rgba(0, 0, 0, 0.16) !important;
+    background: rgba(0, 0, 0, 0.18) !important;
 }
 
 .primary-actions button {
@@ -256,6 +259,62 @@ CUSTOM_CSS = """
     border-color: var(--gosim-border) !important;
     background: #121414 !important;
     color: var(--gosim-text) !important;
+}
+
+.gradio-container input[type="checkbox"] {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-grid;
+    place-content: center;
+    border: 1.5px solid #7b8794 !important;
+    border-radius: 4px !important;
+    background: rgba(7, 12, 10, 0.82) !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+}
+
+.gradio-container input[type="checkbox"]::before {
+    content: "";
+    width: 9px;
+    height: 9px;
+    transform: scale(0);
+    transition: transform 120ms ease;
+    background: #07130e;
+    clip-path: polygon(14% 44%, 0 59%, 38% 100%, 100% 18%, 84% 4%, 36% 70%);
+}
+
+.gradio-container input[type="checkbox"]:checked {
+    border-color: #7ee1b6 !important;
+    background: #62d6a6 !important;
+    box-shadow: 0 0 0 3px rgba(98, 214, 166, 0.18);
+}
+
+.gradio-container input[type="checkbox"]:checked::before {
+    transform: scale(1);
+}
+
+.gradio-container input[type="checkbox"]:focus-visible {
+    outline: 2px solid rgba(126, 225, 182, 0.72);
+    outline-offset: 2px;
+}
+
+.gradio-container label:has(input[type="checkbox"]) {
+    gap: 10px !important;
+    align-items: center !important;
+    color: #e8edf3 !important;
+}
+
+.gradio-container label:has(input[type="checkbox"]:checked) {
+    color: #ffffff !important;
+}
+
+.gradio-container label:has(input[type="checkbox"]:checked),
+.gradio-container .checkbox-label:has(input[type="checkbox"]:checked) {
+    background: rgba(98, 214, 166, 0.1) !important;
+    border-color: rgba(126, 225, 182, 0.42) !important;
 }
 
 .gradio-container button.primary,

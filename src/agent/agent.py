@@ -17,6 +17,7 @@ from typing import Any, Dict, Iterator, List, Optional, Union
 
 from ..blender.client import BlenderClient
 from ..llm.base import BaseLLM
+from .visual_verifier import VisualVerifierAgent
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -43,9 +44,15 @@ PHYSICAL_RULES_PROMPT = """你是 Blender/Infinigen 场景编辑 planner。
 class BlenderAgent:
     """Agent that converts LLM function calls into Infinigen-aware Blender edits."""
 
-    def __init__(self, llm: BaseLLM, blender_client: BlenderClient):
+    def __init__(
+        self,
+        llm: BaseLLM,
+        blender_client: BlenderClient,
+        visual_verifier: VisualVerifierAgent | None = None,
+    ):
         self.llm = llm
         self.blender_client = blender_client
+        self.visual_verifier = visual_verifier
         self.messages: list[dict[str, Any]] = [{"role": "system", "content": PHYSICAL_RULES_PROMPT}]
         self.current_run_id: str | None = None
         self._last_cancel_check = 0.0
@@ -53,6 +60,9 @@ class BlenderAgent:
 
     def update_blender_client(self, blender_client: BlenderClient):
         self.blender_client = blender_client
+
+    def update_visual_verifier(self, visual_verifier: VisualVerifierAgent | None):
+        self.visual_verifier = visual_verifier
 
     def _init_functions(self):
         self.functions = [
