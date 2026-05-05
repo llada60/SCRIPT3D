@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 import uuid
 from typing import Any, Dict, Iterator, List, Optional, Union
@@ -27,18 +28,46 @@ logger = logging.getLogger(__name__)
 PHYSICAL_RULES_PROMPT = """你是 Blender/Infinigen 场景编辑 planner。
 遵守这些写死的物理规则：
 - 把cube删掉
-- 不要乱加东西
+- 严格按照用户当前指令执行，只做用户明确要求的动作。
+- 不要乱加东西；不要为了“更自然”“更丰富”“更好看”添加、移动、删除或修改用户没有要求的物体。
+- 如果用户只要求添加草莓并放到椅子上，就只添加草莓、放到椅子的承托面上，并执行必要的物理/索引更新；不要添加桌子或其他家具。
 - 符合物理常识，例如：家具通常放在地面上
 - 水果比家具小，地毯比家具大但很薄，灯具需要支撑面。
 - 
 - 不要让对象悬空；空间编辑后对被编辑对象调用 apply_physics_rules，再调用 rebuild_scene_index。
 - 表达“放到上面”时优先用 place_on，不要用裸 move_object。
+- 对椅子/沙发表达“放在上面”时，目标是坐垫/承托面，不是椅背或靠背顶部。
 - 表达“旁边/靠墙”时优先用 place_near/place_against_wall。
 - 大型家具默认落地；地毯必须落地。
 - 缩放保持在合理范围，执行层会把极端 scale clamp 到安全范围。
 - 用户要求调整视角、构图、相机位置、让渲染主体居中或变大/变小时，优先调用 adjust_camera_from_render。
 不要生成 Python 代码，只使用提供的 function call。
+任务完成后回复“全部完成”，不要主动提出或执行额外优化。
 """
+
+
+ASSET_REQUEST_ALIASES = {
+    "bed": ("bed", "床"),
+    "desk": ("desk", "书桌", "桌子", "办公桌"),
+    "table": ("table", "餐桌"),
+    "side_table": ("side_table", "床头柜", "边几", "nightstand"),
+    "desk_lamp": ("desk_lamp", "lamp", "台灯", "灯"),
+    "chair": ("chair", "椅子", "座椅"),
+    "sofa": ("sofa", "沙发"),
+    "cabinet": ("cabinet", "柜子"),
+    "bookcase": ("bookcase", "书架"),
+    "rug": ("rug", "地毯"),
+    "plant": ("plant", "植物", "盆栽"),
+    "apple": ("apple", "苹果"),
+    "blackberry": ("blackberry", "黑莓"),
+    "green_coconut": ("green_coconut", "coconutgreen", "青椰子", "椰青"),
+    "hairy_coconut": ("hairy_coconut", "coconuthairy", "椰子", "毛椰子"),
+    "durian": ("durian", "榴莲"),
+    "pineapple": ("pineapple", "菠萝", "凤梨"),
+    "starfruit": ("starfruit", "杨桃"),
+    "strawberry": ("strawberry", "草莓"),
+    "compositional_fruit": ("compositional_fruit", "组合水果", "复合水果"),
+}
 
 
 class BlenderAgent:
@@ -55,6 +84,7 @@ class BlenderAgent:
         self.visual_verifier = visual_verifier
         self.messages: list[dict[str, Any]] = [{"role": "system", "content": PHYSICAL_RULES_PROMPT}]
         self.current_run_id: str | None = None
+        self.current_user_request_text = ""
         self._last_cancel_check = 0.0
         self._init_functions()
 
@@ -171,7 +201,7 @@ class BlenderAgent:
             },
             {
                 "name": "place_on",
-                "description": "把 source 放到 target 的上表面中心，例如把台灯放到桌子上。",
+                "description": "把 source 放到 target 的可承托上表面中心，例如桌面或椅子坐垫。",
                 "parameters": {
                     "source": {"type": "string", "description": "要移动的对象。"},
                     "target": {"type": "string", "description": "承载对象。"},
@@ -290,6 +320,65 @@ class BlenderAgent:
     def reset_messages(self):
         self.messages = [{"role": "system", "content": PHYSICAL_RULES_PROMPT}]
 
+    def _message_to_text(self, message: Union[str, List[Dict[str, Any]]]) -> str:
+        if isinstance(message, str):
+            return message
+        parts: list[str] = []
+        for item in message:
+            if item.get("type") == "text":
+                parts.append(str(item.get("text") or item.get("content") or ""))
+        return " ".join(part for part in parts if part)
+
+    def _category_from_asset_request(self, value: Any) -> str:
+        text = str(value or "").lower()
+        for category, aliases in ASSET_REQUEST_ALIASES.items():
+            if category in text or any(str(alias).lower() in text for alias in aliases):
+                return category
+        return text
+
+    def _requested_asset_categories(self) -> set[str]:
+        text = self.current_user_request_text.lower()
+        addition_matches = list(
+            re.finditer(
+                r"(添加|新增|创建|生成|加|add|create|generate)\s*(?P<items>[^，。,.;]*?)(?=放到|放在|放上|放|$)",
+                text,
+                re.IGNORECASE,
+            )
+        )
+        if not addition_matches:
+            return set()
+
+        requested: set[str] = set()
+        for match in addition_matches:
+            item_text = match.group("items")
+            for category, aliases in ASSET_REQUEST_ALIASES.items():
+                if category in item_text or any(str(alias).lower() in item_text for alias in aliases):
+                    requested.add(category)
+        return requested
+
+    def _validate_function_call_against_request(self, function_call: Dict[str, Any]) -> Dict[str, Any] | None:
+        if function_call.get("name") != "add_infinigen_asset":
+            return None
+
+        arguments = function_call.get("arguments", {})
+        category = self._category_from_asset_request(
+            arguments.get("category_or_factory") or arguments.get("category")
+        )
+        requested = self._requested_asset_categories()
+        if category in requested:
+            return None
+
+        return {
+            "status": "blocked",
+            "message": (
+                f"已阻止添加未在原始指令中明确要求的资产：{category}。"
+                "Agent 将严格按照用户指令执行，不主动丰富场景。"
+            ),
+            "function": function_call.get("name"),
+            "requested_assets": sorted(requested),
+            "blocked_asset": category,
+        }
+
     def chat_stream(
         self,
         user_message: Union[str, List[Dict[str, Any]]],
@@ -298,6 +387,9 @@ class BlenderAgent:
     ) -> Iterator[Dict[str, Any]]:
         functions_to_use = functions if functions is not None else self.functions
         if user_message:
+            user_text = self._message_to_text(user_message).strip()
+            if user_text and "继续完成原始用户指令" not in user_text:
+                self.current_user_request_text = user_text
             self.add_message("user", user_message)
 
         if not hasattr(self.llm, "chat_stream"):
@@ -365,11 +457,16 @@ class BlenderAgent:
             arguments = function_call.get("arguments", {})
             if isinstance(arguments, str):
                 arguments = json.loads(arguments) if arguments.strip() else {}
+            function_call["arguments"] = arguments
 
             if self.blender_client is None:
                 return {"status": "error", "message": "Blender 未连接，请先连接 Blender 插件服务。"}
             if not hasattr(self.blender_client, function_name):
                 return {"status": "error", "message": f"函数 {function_name} 不存在"}
+
+            blocked = self._validate_function_call_against_request(function_call)
+            if blocked is not None:
+                return blocked
 
             self._raise_if_blender_cancelled(force=True)
             self._set_agent_status("running", f"正在 Blender 中执行：{function_name}", operation=function_name)

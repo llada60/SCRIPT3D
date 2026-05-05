@@ -140,6 +140,9 @@ PHYSICS_FLOOR_Z = 0.0
 PHYSICS_GROUND_EPS = 0.03
 PHYSICS_SUPPORT_EPS = 0.12
 PHYSICS_COLLISION_EPS = 0.02
+SUPPORT_SURFACE_Z_BIN = 0.04
+SUPPORT_SURFACE_MIN_AREA = 0.01
+SEATING_SURFACE_MAX_RELATIVE_Z = 0.78
 MIN_SPAWN_SCALE = 0.05
 MAX_SPAWN_SCALE = 5.0
 MIN_SCALE_FACTOR = 0.3
@@ -775,6 +778,110 @@ def _set_asset_location_by_bbox_min(asset: dict[str, Any], new_bbox_min: Vector)
     _move_asset(asset, new_bbox_min - current_min)
 
 
+def _polygon_world_area(points: list[Vector]) -> float:
+    if len(points) < 3:
+        return 0.0
+    origin = points[0]
+    area = 0.0
+    for i in range(1, len(points) - 1):
+        area += ((points[i] - origin).cross(points[i + 1] - origin)).length / 2
+    return area
+
+
+def _support_surface_candidates(asset: dict[str, Any]) -> list[dict[str, Any]]:
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    bins: dict[int, dict[str, Any]] = {}
+
+    for obj in _objects_for_asset(asset):
+        if obj.type != "MESH" or not obj.data:
+            continue
+        eval_obj = obj.evaluated_get(depsgraph)
+        mesh = None
+        try:
+            mesh = eval_obj.to_mesh()
+            normal_matrix = eval_obj.matrix_world.to_3x3()
+            for poly in mesh.polygons:
+                normal = (normal_matrix @ poly.normal).normalized()
+                if normal.z < 0.55:
+                    continue
+
+                points = [eval_obj.matrix_world @ mesh.vertices[index].co for index in poly.vertices]
+                area = _polygon_world_area(points)
+                if area <= 1e-6:
+                    continue
+
+                center = sum(points, Vector((0, 0, 0))) / len(points)
+                key = round(center.z / SUPPORT_SURFACE_Z_BIN)
+                xs = [point.x for point in points]
+                ys = [point.y for point in points]
+                zs = [point.z for point in points]
+                bucket = bins.setdefault(
+                    key,
+                    {
+                        "area": 0.0,
+                        "weighted_center": Vector((0, 0, 0)),
+                        "min_x": min(xs),
+                        "max_x": max(xs),
+                        "min_y": min(ys),
+                        "max_y": max(ys),
+                        "z": max(zs),
+                    },
+                )
+                bucket["area"] += area
+                bucket["weighted_center"] += center * area
+                bucket["min_x"] = min(bucket["min_x"], min(xs))
+                bucket["max_x"] = max(bucket["max_x"], max(xs))
+                bucket["min_y"] = min(bucket["min_y"], min(ys))
+                bucket["max_y"] = max(bucket["max_y"], max(ys))
+                bucket["z"] = max(bucket["z"], max(zs))
+        except Exception as exc:
+            print(f"[GOSIM] Support surface scan skipped {obj.name}: {exc}")
+        finally:
+            if mesh is not None:
+                eval_obj.to_mesh_clear()
+
+    candidates: list[dict[str, Any]] = []
+    for bucket in bins.values():
+        area = float(bucket["area"])
+        if area < SUPPORT_SURFACE_MIN_AREA:
+            continue
+        center = bucket["weighted_center"] / area
+        candidates.append(
+            {
+                "area": area,
+                "center": [float(center.x), float(center.y), float(bucket["z"])],
+                "bbox_min": [float(bucket["min_x"]), float(bucket["min_y"]), float(bucket["z"])],
+                "bbox_max": [float(bucket["max_x"]), float(bucket["max_y"]), float(bucket["z"])],
+                "z": float(bucket["z"]),
+            }
+        )
+    return candidates
+
+
+def _support_surface_for_place_on(target: dict[str, Any]) -> dict[str, Any]:
+    candidates = _support_surface_candidates(target)
+    bbox_min = Vector(target["bbox_min"])
+    bbox_max = Vector(target["bbox_max"])
+    dimensions = Vector(target["dimensions"])
+    category = target.get("category")
+
+    if candidates:
+        if category in {"chair", "sofa"} and dimensions.z > 1e-6:
+            max_seat_z = bbox_min.z + dimensions.z * SEATING_SURFACE_MAX_RELATIVE_Z
+            seating_candidates = [candidate for candidate in candidates if candidate["z"] <= max_seat_z]
+            if seating_candidates:
+                return max(seating_candidates, key=lambda item: (item["area"], item["z"]))
+        return max(candidates, key=lambda item: (item["z"], item["area"]))
+
+    return {
+        "area": max(0.0, dimensions.x * dimensions.y),
+        "center": [float((bbox_min.x + bbox_max.x) / 2), float((bbox_min.y + bbox_max.y) / 2), float(bbox_max.z)],
+        "bbox_min": [float(bbox_min.x), float(bbox_min.y), float(bbox_max.z)],
+        "bbox_max": [float(bbox_max.x), float(bbox_max.y), float(bbox_max.z)],
+        "z": float(bbox_max.z),
+    }
+
+
 def _clamp(value: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(maximum, value))
 
@@ -788,7 +895,8 @@ def _find_supporting_asset(
             continue
         if other.get("category") in {"wall", "ceiling", "window", "door"}:
             continue
-        z_gap = abs(float(asset["bbox_min"][2]) - float(other["bbox_max"][2]))
+        support_surface = _support_surface_for_place_on(other)
+        z_gap = abs(float(asset["bbox_min"][2]) - float(support_surface["z"]))
         if z_gap <= PHYSICS_SUPPORT_EPS and _xy_overlap(asset, other) > 0.12:
             return other
     return None
@@ -1435,12 +1543,13 @@ def cmd_place_on(payload: dict[str, Any]) -> dict[str, Any]:
     source = _resolve_asset(payload.get("source"))
     target = _resolve_asset(payload.get("target"))
     source_dims = Vector(source["dimensions"])
-    target_center = Vector(target["center"])
+    support_surface = _support_surface_for_place_on(target)
+    surface_center = Vector(support_surface["center"])
     new_min = Vector(
         (
-            target_center.x - source_dims.x / 2,
-            target_center.y - source_dims.y / 2,
-            target["bbox_max"][2],
+            surface_center.x - source_dims.x / 2,
+            surface_center.y - source_dims.y / 2,
+            support_surface["z"],
         )
     )
     _set_asset_location_by_bbox_min(source, new_min)
@@ -1449,6 +1558,7 @@ def cmd_place_on(payload: dict[str, Any]) -> dict[str, Any]:
         "message": f"Placed {source['name']} on {target['name']}",
         "source_id": source["object_id"],
         "target_id": target["object_id"],
+        "support_surface": support_surface,
         "physics": physics,
     }
 
