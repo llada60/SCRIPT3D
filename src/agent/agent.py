@@ -21,13 +21,24 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
+PHYSICAL_RULES_PROMPT = """你是 Blender/Infinigen 场景编辑 planner。
+遵守这些写死的物理规则：
+- 不要让对象悬空；空间编辑后对被编辑对象调用 apply_physics_rules，再调用 rebuild_scene_index。
+- 表达“放到上面”时优先用 place_on，不要用裸 move_object。
+- 表达“旁边/靠墙”时优先用 place_near/place_against_wall。
+- 大型家具默认落地；地毯必须落地；灯和水果等小物体需要支撑面。
+- 缩放保持在合理范围，执行层会把极端 scale clamp 到安全范围。
+不要生成 Python 代码，只使用提供的 function call。
+"""
+
+
 class BlenderAgent:
     """Agent that converts LLM function calls into Infinigen-aware Blender edits."""
 
     def __init__(self, llm: BaseLLM, blender_client: BlenderClient):
         self.llm = llm
         self.blender_client = blender_client
-        self.messages: list[dict[str, Any]] = []
+        self.messages: list[dict[str, Any]] = [{"role": "system", "content": PHYSICAL_RULES_PROMPT}]
         self._init_functions()
 
     def update_blender_client(self, blender_client: BlenderClient):
@@ -173,6 +184,14 @@ class BlenderAgent:
                 "required": ["target"],
             },
             {
+                "name": "apply_physics_rules",
+                "description": "对场景或指定对象应用写死的物理规则：防悬空、贴地、缩放/放置后的基础碰撞提示。",
+                "parameters": {
+                    "target": {"type": "string", "description": "目标对象；不填则检查整个场景。"}
+                },
+                "required": [],
+            },
+            {
                 "name": "set_material",
                 "description": "修改对象材质颜色。",
                 "parameters": {
@@ -228,6 +247,9 @@ class BlenderAgent:
         max_messages = (n_keep_first * 2) + (n_keep_latest * 2)
         if len(self.messages) > max_messages:
             self.messages = self.messages[:n_keep_first] + self.messages[-(n_keep_latest * 2) :]
+
+    def reset_messages(self):
+        self.messages = [{"role": "system", "content": PHYSICAL_RULES_PROMPT}]
 
     def chat_stream(
         self,

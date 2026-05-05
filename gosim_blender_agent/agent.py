@@ -77,6 +77,12 @@ class GosimAgent:
             )
         if action.name in {"move_object", "scale_object", "rotate_object", "set_material", "place_on", "place_near", "place_against_wall", "delete_object"}:
             return result.get("message", f"{action.name} 完成。") if isinstance(result, dict) else f"{action.name} 完成。"
+        if action.name == "apply_physics_rules":
+            if not isinstance(result, dict):
+                return "物理规则检查完成。"
+            corrections = len(result.get("corrections", []))
+            warnings = len(result.get("warnings", []))
+            return f"物理规则检查完成：{corrections} 个修正，{warnings} 个提示。"
         if action.name == "render_scene":
             return f"预览已渲染：{result.get('path')}"
         if action.name == "save_blend":

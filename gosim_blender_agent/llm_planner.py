@@ -36,8 +36,18 @@ Allowed tools:
 - place_on {"source": "object/category/name", "target": "object/category/name"}
 - place_near {"source": "object/category/name", "target": "object/category/name", "side": "left|right|front|back", "gap": 0.25}
 - place_against_wall {"target": "object/category/name"}
+- apply_physics_rules {"target": "object/category/name"} or {}
 
-Always add rebuild_scene_index after edit operations.
+Hard physical rules:
+- Never intentionally leave objects floating. Use place_on for supported placement and apply_physics_rules after spatial edits.
+- Large furniture should rest on the floor unless explicitly placed on another support.
+- Small supported objects such as lamps and fruit should use place_on when the user names a support surface.
+- Rugs must rest on the floor.
+- Do not use raw move_object to express "on", "beside", or "against wall" when a placement tool fits.
+- Keep scale factors within a practical range; executor will clamp unsafe values.
+
+Always add apply_physics_rules with the edited target/source after spatial edit operations, then add rebuild_scene_index.
+Only omit the apply_physics_rules target when the user asks to check the whole scene.
 When the user message starts with "\\editing", use edit_generated_asset.
 Use semantic categories when object ids are unknown.
 When adding strawberry, omit scale or use 0.15 unless the user asks for a different size.

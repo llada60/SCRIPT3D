@@ -21,6 +21,17 @@ class Action:
 
 
 class RulePlanner:
+    SPATIAL_EDIT_ACTIONS = {
+        "add_infinigen_asset",
+        "edit_generated_asset",
+        "move_object",
+        "scale_object",
+        "rotate_object",
+        "place_on",
+        "place_near",
+        "place_against_wall",
+    }
+
     def plan(self, text: str) -> list[Action]:
         raw = text.strip()
         lowered = raw.lower()
@@ -28,7 +39,7 @@ class RulePlanner:
 
         editing = self._plan_editing(raw)
         if editing:
-            return [editing, Action("rebuild_scene_index")]
+            return self._finalize_actions([editing])
 
         blend_path = self._find_blend_path(raw)
         if blend_path:
@@ -83,10 +94,30 @@ class RulePlanner:
             actions.append(delete)
 
         if actions:
-            actions.append(Action("rebuild_scene_index"))
-            return actions
+            return self._finalize_actions(actions)
 
         return [Action("query_objects", {"text": raw})]
+
+    def _finalize_actions(self, actions: list[Action]) -> list[Action]:
+        finalized: list[Action] = []
+        for action in actions:
+            finalized.append(action)
+            physics = self._physics_action_for(action)
+            if physics:
+                finalized.append(physics)
+        finalized.append(Action("rebuild_scene_index"))
+        return finalized
+
+    def _physics_action_for(self, action: Action) -> Action | None:
+        if action.name not in self.SPATIAL_EDIT_ACTIONS:
+            return None
+        if action.name in {"add_infinigen_asset"}:
+            return None
+        if action.name in {"place_on", "place_near"}:
+            target = action.args.get("source")
+        else:
+            target = action.args.get("target")
+        return Action("apply_physics_rules", {"target": target}) if target else None
 
     def _plan_editing(self, text: str) -> Action | None:
         lowered = text.lower().strip()

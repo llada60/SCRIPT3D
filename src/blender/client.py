@@ -219,6 +219,12 @@ class BlenderClient:
             params["wall"] = wall
         return self.send_command("place_against_wall", params)
 
+    def apply_physics_rules(self, target: Optional[str] = None) -> Dict[str, Any]:
+        params: Dict[str, Any] = {}
+        if target:
+            params["target"] = target
+        return self.send_command("apply_physics_rules", params)
+
     def render_scene(
         self,
         output_path: Optional[str] = None,

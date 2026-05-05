@@ -261,7 +261,10 @@ def clear():
     # 如果存在Agent，也清空Agent的消息历史
     agent = get_agent()
     if agent:
-        agent.messages = []
+        if hasattr(agent, "reset_messages"):
+            agent.reset_messages()
+        else:
+            agent.messages = []
     
     yield gr.update(value=None)
 

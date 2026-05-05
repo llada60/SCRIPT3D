@@ -132,6 +132,9 @@ class BlenderClient:
             {"target": target, "wall": wall, "gap": gap},
         )
 
+    def apply_physics_rules(self, target: str | None = None) -> Any:
+        return self.request("apply_physics_rules", {"target": target})
+
     def render_scene(self, path: str | Path | None = None, resolution: tuple[int, int] = (1280, 720)) -> Any:
         return self.request(
             "render_scene",

@@ -141,6 +141,16 @@ DEFAULT_ASSET_SCALES = {
     "strawberry": 0.15,
 }
 
+PHYSICS_FLOOR_Z = 0.0
+PHYSICS_GROUND_EPS = 0.03
+PHYSICS_SUPPORT_EPS = 0.12
+PHYSICS_COLLISION_EPS = 0.02
+MIN_SPAWN_SCALE = 0.05
+MAX_SPAWN_SCALE = 5.0
+MIN_SCALE_FACTOR = 0.3
+MAX_SCALE_FACTOR = 3.0
+STRUCTURAL_CATEGORIES = {"wall", "floor", "ceiling", "room", "window", "door", "camera"}
+
 
 COLOR_MAP = {
     "red": (0.9, 0.05, 0.03, 1.0),
@@ -677,6 +687,117 @@ def _set_asset_location_by_bbox_min(asset: dict[str, Any], new_bbox_min: Vector)
     _move_asset(asset, new_bbox_min - current_min)
 
 
+def _clamp(value: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(maximum, value))
+
+
+def _find_supporting_asset(
+    asset: dict[str, Any],
+    assets: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    for other in assets:
+        if other["object_id"] == asset["object_id"]:
+            continue
+        if other.get("category") in {"wall", "ceiling", "window", "door"}:
+            continue
+        z_gap = abs(float(asset["bbox_min"][2]) - float(other["bbox_max"][2]))
+        if z_gap <= PHYSICS_SUPPORT_EPS and _xy_overlap(asset, other) > 0.12:
+            return other
+    return None
+
+
+def _bbox_overlap_3d(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    overlaps = []
+    for axis in range(3):
+        amin = float(a["bbox_min"][axis])
+        amax = float(a["bbox_max"][axis])
+        bmin = float(b["bbox_min"][axis])
+        bmax = float(b["bbox_max"][axis])
+        overlaps.append(min(amax, bmax) - max(amin, bmin))
+    return all(overlap > PHYSICS_COLLISION_EPS for overlap in overlaps)
+
+
+def _apply_physics_rules(target: str | None = None) -> dict[str, Any]:
+    index = _build_scene_index()
+    assets = index["assets"]
+    if target:
+        target_asset = _resolve_asset(target)
+        target_ids = {target_asset["object_id"]}
+    else:
+        target_ids = {
+            asset["object_id"]
+            for asset in assets
+            if asset.get("category") not in STRUCTURAL_CATEGORIES
+        }
+
+    corrections: list[dict[str, Any]] = []
+    warnings: list[dict[str, Any]] = []
+
+    for object_id in sorted(target_ids):
+        asset = _resolve_asset(object_id)
+        category = asset.get("category")
+        if category in STRUCTURAL_CATEGORIES:
+            continue
+
+        support = _find_supporting_asset(asset, _build_scene_index()["assets"])
+        bbox_min = Vector(asset["bbox_min"])
+        if bbox_min.z < PHYSICS_FLOOR_Z - PHYSICS_GROUND_EPS:
+            _set_asset_location_by_bbox_min(
+                asset,
+                Vector((bbox_min.x, bbox_min.y, PHYSICS_FLOOR_Z)),
+            )
+            corrections.append(
+                {
+                    "object_id": object_id,
+                    "rule": "snap_above_floor",
+                    "from_z": float(bbox_min.z),
+                    "to_z": PHYSICS_FLOOR_Z,
+                }
+            )
+        elif bbox_min.z > PHYSICS_FLOOR_Z + PHYSICS_GROUND_EPS and support is None:
+            _set_asset_location_by_bbox_min(
+                asset,
+                Vector((bbox_min.x, bbox_min.y, PHYSICS_FLOOR_Z)),
+            )
+            corrections.append(
+                {
+                    "object_id": object_id,
+                    "rule": "prevent_floating",
+                    "from_z": float(bbox_min.z),
+                    "to_z": PHYSICS_FLOOR_Z,
+                }
+            )
+
+    index = _build_scene_index()
+    by_id = {asset["object_id"]: asset for asset in index["assets"]}
+    for object_id in sorted(target_ids):
+        asset = by_id.get(object_id)
+        if not asset or asset.get("category") in STRUCTURAL_CATEGORIES:
+            continue
+        for other in index["assets"]:
+            if other["object_id"] == object_id or other.get("category") in STRUCTURAL_CATEGORIES:
+                continue
+            if _bbox_overlap_3d(asset, other):
+                pair = sorted([object_id, other["object_id"]])
+                warning_id = f"{pair[0]}:{pair[1]}"
+                if not any(item.get("id") == warning_id for item in warnings):
+                    warnings.append(
+                        {
+                            "id": warning_id,
+                            "rule": "possible_collision",
+                            "object_id": object_id,
+                            "other_id": other["object_id"],
+                        }
+                    )
+
+    return {
+        "message": f"Applied physical rules: {len(corrections)} corrections, {len(warnings)} warnings",
+        "target": target,
+        "corrections": corrections,
+        "warnings": warnings,
+    }
+
+
 def _direction_vector(direction: str) -> Vector:
     mapping = {
         "left": Vector((-1, 0, 0)),
@@ -823,6 +944,8 @@ def _spawn_infinigen_asset(
 ) -> dict[str, Any]:
     factory_path, cls = _resolve_factory(category_or_factory)
     category = _category_from_asset_request(str(category_or_factory), factory_path)
+    requested_scale = scale
+    scale = _clamp(float(scale), MIN_SPAWN_SCALE, MAX_SPAWN_SCALE)
 
     factory = cls(seed)
     if hasattr(factory, "spawn_asset"):
@@ -858,6 +981,9 @@ def _spawn_infinigen_asset(
         bpy.context.view_layer.update()
         final_asset = _resolve_asset(asset_id)
 
+    physics = _apply_physics_rules(asset_id)
+    final_asset = _resolve_asset(asset_id)
+
     script_path = _write_generation_script(
         asset_id=asset_id,
         category=category,
@@ -884,6 +1010,9 @@ def _spawn_infinigen_asset(
         "bbox_min": final_asset["bbox_min"],
         "bbox_max": final_asset["bbox_max"],
         "generation_script": script_path,
+        "requested_scale": requested_scale,
+        "scale": scale,
+        "physics": physics,
     }
 
 
@@ -1026,6 +1155,7 @@ def cmd_edit_generated_asset(payload: dict[str, Any]) -> dict[str, Any]:
     for obj in old_objects:
         bpy.data.objects.remove(obj, do_unlink=True)
     bpy.context.view_layer.update()
+    physics = _apply_physics_rules(new_asset["object_id"])
     final_asset = _resolve_asset(new_asset["object_id"])
 
     return {
@@ -1039,6 +1169,7 @@ def cmd_edit_generated_asset(payload: dict[str, Any]) -> dict[str, Any]:
         "generation_script": script_path,
         "bbox_min": final_asset["bbox_min"],
         "bbox_max": final_asset["bbox_max"],
+        "physics": physics,
         "deleted_count": len(old_objects),
     }
 
@@ -1049,16 +1180,29 @@ def cmd_move_object(payload: dict[str, Any]) -> dict[str, Any]:
     distance = float(payload.get("distance", 0.3))
     delta = _direction_vector(direction) * distance
     _move_asset(asset, delta)
-    return {"message": f"Moved {asset['name']} {direction} by {distance}m", "object_id": asset["object_id"]}
+    physics = _apply_physics_rules(asset["object_id"])
+    return {
+        "message": f"Moved {asset['name']} {direction} by {distance}m",
+        "object_id": asset["object_id"],
+        "physics": physics,
+    }
 
 
 def cmd_scale_object(payload: dict[str, Any]) -> dict[str, Any]:
     asset = _resolve_asset(payload.get("target"))
-    factor = float(payload.get("factor", 1.2))
+    requested_factor = float(payload.get("factor", 1.2))
+    factor = _clamp(requested_factor, MIN_SCALE_FACTOR, MAX_SCALE_FACTOR)
     for obj in _root_objects_for_asset(asset):
         obj.scale = obj.scale * factor
     bpy.context.view_layer.update()
-    return {"message": f"Scaled {asset['name']} by {factor}", "object_id": asset["object_id"]}
+    physics = _apply_physics_rules(asset["object_id"])
+    return {
+        "message": f"Scaled {asset['name']} by {factor}",
+        "object_id": asset["object_id"],
+        "requested_factor": requested_factor,
+        "factor": factor,
+        "physics": physics,
+    }
 
 
 def cmd_rotate_object(payload: dict[str, Any]) -> dict[str, Any]:
@@ -1069,7 +1213,12 @@ def cmd_rotate_object(payload: dict[str, Any]) -> dict[str, Any]:
     for obj in _root_objects_for_asset(asset):
         obj.rotation_euler[axis_index] += angle
     bpy.context.view_layer.update()
-    return {"message": f"Rotated {asset['name']} around {axis} by {math.degrees(angle):.1f} degrees", "object_id": asset["object_id"]}
+    physics = _apply_physics_rules(asset["object_id"])
+    return {
+        "message": f"Rotated {asset['name']} around {axis} by {math.degrees(angle):.1f} degrees",
+        "object_id": asset["object_id"],
+        "physics": physics,
+    }
 
 
 def cmd_delete_object(payload: dict[str, Any]) -> dict[str, Any]:
@@ -1106,10 +1255,12 @@ def cmd_place_on(payload: dict[str, Any]) -> dict[str, Any]:
         )
     )
     _set_asset_location_by_bbox_min(source, new_min)
+    physics = _apply_physics_rules(source["object_id"])
     return {
         "message": f"Placed {source['name']} on {target['name']}",
         "source_id": source["object_id"],
         "target_id": target["object_id"],
+        "physics": physics,
     }
 
 
@@ -1133,10 +1284,12 @@ def cmd_place_near(payload: dict[str, Any]) -> dict[str, Any]:
         new_min = Vector((target_max.x + gap, target_center.y - source_dims.y / 2, target_min.z))
 
     _set_asset_location_by_bbox_min(source, new_min)
+    physics = _apply_physics_rules(source["object_id"])
     return {
         "message": f"Placed {source['name']} near {target['name']} on {side}",
         "source_id": source["object_id"],
         "target_id": target["object_id"],
+        "physics": physics,
     }
 
 
@@ -1158,11 +1311,17 @@ def cmd_place_against_wall(payload: dict[str, Any]) -> dict[str, Any]:
         y = wall_max.y + gap
         new_min = Vector((wall_center.x - source_dims.x / 2, y, wall_min.z))
     _set_asset_location_by_bbox_min(source, new_min)
+    physics = _apply_physics_rules(source["object_id"])
     return {
         "message": f"Placed {source['name']} against {wall['name']}",
         "source_id": source["object_id"],
         "wall_id": wall["object_id"],
+        "physics": physics,
     }
+
+
+def cmd_apply_physics_rules(payload: dict[str, Any]) -> dict[str, Any]:
+    return _apply_physics_rules(payload.get("target"))
 
 
 def _ensure_camera() -> bpy.types.Object:
@@ -1213,6 +1372,7 @@ COMMANDS = {
     "place_on": cmd_place_on,
     "place_near": cmd_place_near,
     "place_against_wall": cmd_place_against_wall,
+    "apply_physics_rules": cmd_apply_physics_rules,
     "render_scene": cmd_render_scene,
 }
 
