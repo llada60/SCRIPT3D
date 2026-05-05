@@ -177,11 +177,6 @@ Set your API keys and model configurations in the `config.json` file:
   "aimlapi": {
     "api_key": "YOUR_AIMLAPI_API_KEY",
     "model": "claude-3-7-sonnet-20250219"
-  },
-  "r9s": {
-    "api_key": "YOUR_R9S_API_KEY",
-    "model": "r9s-1-5-pro-32k-250115",
-    "api_base": "https://api.r9s.ai/v1"
   }
 }
 ```

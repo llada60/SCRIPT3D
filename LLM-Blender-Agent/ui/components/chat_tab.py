@@ -131,7 +131,7 @@ def create_chat_tab(session_id_param):
                 model_selector = gr.Dropdown(
                     label="选择LLM模型",
                     choices=available_models,
-                    value="aimlapi" if "aimlapi" in available_models else available_models[0]
+                    value="r9s" if "r9s" in available_models else available_models[0]
                 )
                 
                 # 状态和按钮放在同一行，按钮在右侧
@@ -225,12 +225,8 @@ def create_chat_tab(session_id_param):
             
             # 更新可用函数列表
             formatted_functions = ["all"] + format_functions_for_display(globals.session_id, globals.agents)
-
-            default_functions = [
-                func for func in formatted_functions
-                if func != "all" and not func.startswith("generate_3d_model ")
-            ]
-            yield result, gr.update(choices=formatted_functions, value=default_functions)
+            
+            yield result, gr.update(choices=formatted_functions, value=["all"])
         
         initialize_btn.click(
             fn=init_and_update_functions,

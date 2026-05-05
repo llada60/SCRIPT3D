@@ -71,7 +71,7 @@ def create_chat_interface():
             # minHeight=550,
             height="100%",
             maxHeight=650,
-            backgroundColor="#27272a",
+            backgroundColor="#ffffff",
             borderRadius="8px",
             padding="15px",
         ),

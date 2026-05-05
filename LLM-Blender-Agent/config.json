@@ -6,7 +6,7 @@
   "llm": {
     "default_model": "r9s",
     "r9s": {
-      "api_key": "",
+      "api_key": "sk-Xbfem76VCfCDHxtHBf85886799E343189e78BeBcB64f5345",
       "model": "deepseek-v4-flash",
       "api_base": "https://api.r9s.ai/v1"
     },
