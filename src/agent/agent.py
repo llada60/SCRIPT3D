@@ -87,7 +87,7 @@ class BlenderAgent:
                     },
                     "seed": {"type": "integer", "description": "随机种子，可选。"},
                     "location": {"type": "array", "description": "放置位置 [x, y, z]，可选。"},
-                    "scale": {"type": "number", "description": "整体缩放，默认 1.0。"},
+                    "scale": {"type": "number", "description": "整体缩放，可选；草莓默认 0.15，其他资产默认 1.0。"},
                 },
                 "required": ["category_or_factory"],
             },

@@ -57,16 +57,18 @@ class BlenderClient:
         category_or_factory: str,
         seed: int = 0,
         location: tuple[float, float, float] | None = None,
-        scale: float = 1.0,
+        scale: float | None = None,
     ) -> Any:
+        payload: dict[str, Any] = {
+            "category_or_factory": category_or_factory,
+            "seed": seed,
+            "location": list(location or (0.0, 0.0, 0.0)),
+        }
+        if scale is not None:
+            payload["scale"] = scale
         return self.request(
             "add_infinigen_asset",
-            {
-                "category_or_factory": category_or_factory,
-                "seed": seed,
-                "location": list(location or (0.0, 0.0, 0.0)),
-                "scale": scale,
-            },
+            payload,
         )
 
     def edit_generated_asset(

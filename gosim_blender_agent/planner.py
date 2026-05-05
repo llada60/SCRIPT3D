@@ -111,7 +111,12 @@ class RulePlanner:
         spec = resolve_asset(text)
         if spec is None:
             return None
-        return [Action("add_infinigen_asset", {"category_or_factory": spec.category})]
+        return [
+            Action(
+                "add_infinigen_asset",
+                {"category_or_factory": spec.category, "scale": spec.default_scale},
+            )
+        ]
 
     def _plan_move(self, text: str) -> Action | None:
         if not any(key in text.lower() for key in ("移动", "移到", "往", "move")):

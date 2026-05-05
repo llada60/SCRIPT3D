@@ -26,6 +26,20 @@ import bpy
 from mathutils import Euler, Vector
 
 
+def _disable_user_site_packages() -> None:
+    try:
+        import site
+
+        user_site = site.getusersitepackages()
+    except Exception:
+        return
+    if user_site:
+        sys.path[:] = [path for path in sys.path if path != user_site]
+
+
+_disable_user_site_packages()
+
+
 HOST = os.getenv("GOSIM_BLENDER_HOST", "127.0.0.1")
 PORT = int(os.getenv("GOSIM_BLENDER_PORT", "9876"))
 REQUEST_QUEUE: queue.Queue[tuple[dict[str, Any], threading.Event, dict[str, Any]]] = queue.Queue()
@@ -120,6 +134,11 @@ CATEGORY_ALIASES = {
     "window": ("window", "窗"),
     "door": ("door", "门"),
     "room": ("room", "卧室", "bedroom", "kitchen", "bathroom", "living"),
+}
+
+
+DEFAULT_ASSET_SCALES = {
+    "strawberry": 0.15,
 }
 
 
@@ -718,14 +737,6 @@ def _ensure_infinigen_on_path() -> Path:
             root = Path(candidate)
             if str(root) not in sys.path:
                 sys.path.insert(0, str(root))
-            try:
-                import site
-
-                user_site = site.getusersitepackages()
-                if user_site and user_site not in sys.path:
-                    sys.path.insert(0, user_site)
-            except Exception:
-                pass
             return root
     raise RuntimeError("Could not locate Infinigen root. Set GOSIM_INFINIGEN_ROOT.")
 
@@ -935,7 +946,13 @@ def cmd_add_infinigen_asset(payload: dict[str, Any]) -> dict[str, Any]:
     category_or_factory = payload.get("category_or_factory") or payload.get("category") or "desk"
     seed = int(payload.get("seed", 0))
     location = Vector(payload.get("location", [0.0, 0.0, 0.0]))
-    scale = float(payload.get("scale", 1.0))
+    factory_path = ASSET_FACTORY_ALIASES.get(str(category_or_factory).lower(), str(category_or_factory))
+    category = _category_from_asset_request(str(category_or_factory), factory_path)
+    scale = (
+        float(payload["scale"])
+        if "scale" in payload
+        else DEFAULT_ASSET_SCALES.get(category, 1.0)
+    )
     source_prompt = payload.get("source_prompt") or payload.get("prompt")
     material_color = _color_from_prompt(str(source_prompt or ""), payload.get("color"))
     return _spawn_infinigen_asset(

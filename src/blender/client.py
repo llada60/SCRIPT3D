@@ -96,16 +96,18 @@ class BlenderClient:
         category_or_factory: str,
         seed: int = 0,
         location: Tuple[float, float, float] = (0, 0, 0),
-        scale: float = 1.0,
+        scale: Optional[float] = None,
     ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {
+            "category_or_factory": category_or_factory,
+            "seed": seed,
+            "location": location,
+        }
+        if scale is not None:
+            params["scale"] = scale
         return self.send_command(
             "add_infinigen_asset",
-            {
-                "category_or_factory": category_or_factory,
-                "seed": seed,
-                "location": location,
-                "scale": scale,
-            },
+            params,
         )
 
     def generate_3d_model(

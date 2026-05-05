@@ -67,21 +67,22 @@ def create_chat_interface():
         elem_style=dict(
             # minHeight=550,
             height="100%",
-            maxHeight=650,
-            backgroundColor="#27272a",
+            maxHeight=700,
+            backgroundColor="#171a20",
             borderRadius="8px",
-            padding="15px",
+            padding="14px",
+            border="1px solid rgba(255,255,255,0.08)",
         ),
         vertical=True,
     ):
         chatbot = pro.Chatbot(
-            height=550,
+            height=590,
             auto_scroll=True,
             elem_style=dict(
                 # flex=1,
                 # overflow="auto",  # 添加滚动条
                 # scrollBehavior="smooth",  # 平滑滚动效果
-                padding="15px",
+                padding="10px",
                 
             ),
             value=[
@@ -98,7 +99,7 @@ def create_chat_interface():
             upload_config=dict(upload_button_tooltip="添加图片"),
             placeholder="请输入想让 Blender/Infinigen 执行的操作指令",
             elem_style=dict(
-                marginTop="10px",
+                marginTop="12px",
             )
         ) as input:
             with ms.Slot("prefix"):

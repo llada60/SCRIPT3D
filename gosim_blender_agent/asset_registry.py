@@ -129,6 +129,7 @@ ASSET_SPECS: tuple[AssetSpec, ...] = (
         "strawberry",
         "infinigen.assets.objects.fruits.FruitFactoryStrawberry",
         ("strawberry", "草莓"),
+        default_scale=0.15,
     ),
     AssetSpec(
         "compositional_fruit",

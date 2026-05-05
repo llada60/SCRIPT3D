@@ -97,8 +97,8 @@ def create_chat_tab(session_id_param):
     
     with ms.Application(), antdx.XProvider():
         # 步骤1和步骤2放在整行
-        with gr.Row():
-            with gr.Column(scale=1):
+        with gr.Row(elem_classes=["setup-grid"]):
+            with gr.Column(scale=1, elem_classes=["setup-card"]):
                 gr.Markdown("## 步骤1: 连接到Blender")
                 
                 # 主机和端口放在同一行
@@ -107,13 +107,13 @@ def create_chat_tab(session_id_param):
                     blender_port = gr.Number(label="Blender端口", value=9876, scale=1)
                 
                 # 状态和按钮放在同一行，按钮在右侧
-                with gr.Row():
+                with gr.Row(elem_classes=["secondary-actions"]):
                     connection_status = gr.Textbox(label="连接状态", interactive=False, scale=3)
                     
                     # 使用列来垂直排列两个按钮
                     with gr.Column(scale=1):
                         connect_btn = gr.Button("连接Blender", variant="primary")
-                        help_btn = gr.Button("❓ 如何启动Blender 插件", variant="secondary",size="md")
+                        help_btn = gr.Button("如何启动插件", variant="secondary", size="md")
                 
                 # 创建模态窗用于显示GIF，初始设置为不可见
                 with Modal(visible=False) as addon_help_modal:
@@ -127,7 +127,7 @@ def create_chat_tab(session_id_param):
                 # 设置关闭按钮点击事件，关闭模态窗
                 close_btn.click(lambda: Modal(visible=False), None, addon_help_modal)
             
-            with gr.Column(scale=1):
+            with gr.Column(scale=1, elem_classes=["setup-card"]):
                 gr.Markdown("## 步骤2: 初始化LLM模型")
                 model_selector = gr.Dropdown(
                     label="选择LLM模型",
@@ -136,7 +136,7 @@ def create_chat_tab(session_id_param):
                 )
                 
                 # 状态和按钮放在同一行，按钮在右侧
-                with gr.Row():
+                with gr.Row(elem_classes=["secondary-actions"]):
                     initialization_status = gr.Textbox(label="初始化状态", interactive=False, scale=3)
                     
                     # 使用列来垂直排列两个按钮
@@ -170,27 +170,31 @@ def create_chat_tab(session_id_param):
                 # 设置关闭按钮点击事件
                 close_advanced_settings_btn.click(lambda: Modal(visible=False), None, advanced_settings_modal)
         
-        # 步骤3标题独占一行
-        # 添加一些空白距离
-        with gr.Row():
-            gr.HTML("<div style='height: 20px;'></div>")
-        gr.Markdown("## 步骤3: 开始与Blender对话")
-        with gr.Row():
-            gr.HTML("<div style='height: 5px;'></div>")
+        gr.Markdown("## 步骤3: 开始与Blender对话", elem_classes=["section-title"])
         
         # 聊天界面部分
-        with gr.Row():
+        with gr.Row(elem_classes=["workspace-grid"]):
 
             # 左侧：聊天界面
-            with gr.Column(scale=2):
+            with gr.Column(scale=2, elem_classes=["chat-panel"]):
                 chatbot, chat_input, clear_btn = create_chat_interface()
                 
             # 右侧：显示区域
-            with gr.Column(scale=1):
-                scene_info = gr.Textbox(label="场景信息", interactive=False, lines=12)
-                render_image = gr.Image(label="渲染结果", interactive=False, height=360)
+            with gr.Column(scale=1, elem_classes=["side-panel"]):
+                scene_info = gr.Textbox(
+                    label="场景信息",
+                    interactive=False,
+                    lines=12,
+                    elem_classes=["scene-info"],
+                )
+                render_image = gr.Image(
+                    label="渲染结果",
+                    interactive=False,
+                    height=360,
+                    elem_classes=["render-preview"],
+                )
                 
-                with gr.Row():
+                with gr.Row(elem_classes=["primary-actions", "action-row"]):
                     render_btn = gr.Button("手动渲染")
                     update_info_btn = gr.Button("更新场景信息")
     

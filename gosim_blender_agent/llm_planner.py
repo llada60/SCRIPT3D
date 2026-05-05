@@ -26,7 +26,7 @@ Allowed tools:
 - open_blend {"path": "/absolute/file.blend"}
 - save_blend {}
 - render_scene {}
-- add_infinigen_asset {"category_or_factory": "bed|desk|table|side_table|desk_lamp|chair|sofa|cabinet|bookcase|rug|plant|apple|blackberry|green_coconut|hairy_coconut|durian|pineapple|starfruit|strawberry|compositional_fruit"}
+- add_infinigen_asset {"category_or_factory": "bed|desk|table|side_table|desk_lamp|chair|sofa|cabinet|bookcase|rug|plant|apple|blackberry|green_coconut|hairy_coconut|durian|pineapple|starfruit|strawberry|compositional_fruit", "scale": 1.0}
 - edit_generated_asset {"target": "object/category/name", "prompt": "full editing instruction", "color": "red|blue|green|white|black|wood|#RRGGBB", "preserve_size": true}
 - move_object {"target": "object/category/name", "direction": "left|right|front|back|up|down", "distance": 0.3}
 - scale_object {"target": "object/category/name", "factor": 1.2}
@@ -40,6 +40,7 @@ Allowed tools:
 Always add rebuild_scene_index after edit operations.
 When the user message starts with "\\editing", use edit_generated_asset.
 Use semantic categories when object ids are unknown.
+When adding strawberry, omit scale or use 0.15 unless the user asks for a different size.
 Do not generate Python code.
 """
 

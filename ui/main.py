@@ -30,6 +30,163 @@ import gradio as gr
 from ui.components.chat_tab import create_chat_tab
 import ui.globals as globals
 
+CUSTOM_CSS = """
+:root {
+    --gosim-bg: #101112;
+    --gosim-surface: #181a1b;
+    --gosim-surface-2: #222524;
+    --gosim-border: #363a37;
+    --gosim-border-soft: rgba(255, 255, 255, 0.08);
+    --gosim-text: #f4f7fb;
+    --gosim-muted: #9aa4b2;
+    --gosim-accent: #62d6a6;
+}
+
+.gradio-container {
+    max-width: none !important;
+    min-height: 100vh;
+    padding: 24px 32px 28px !important;
+    background: var(--gosim-bg) !important;
+    color: var(--gosim-text);
+}
+
+#gosim-shell {
+    max-width: 1680px;
+    margin: 0 auto;
+}
+
+.app-title h1,
+.app-title h2,
+.app-title p {
+    margin: 0;
+}
+
+.app-title h2 {
+    font-size: 28px;
+    line-height: 1.15;
+    letter-spacing: 0;
+}
+
+.app-subtitle {
+    margin-top: 8px !important;
+    color: var(--gosim-muted);
+    font-size: 14px;
+}
+
+.setup-grid,
+.workspace-grid,
+.action-row {
+    gap: 18px !important;
+}
+
+.setup-card,
+.side-panel,
+.chat-panel {
+    border: 1px solid var(--gosim-border-soft);
+    border-radius: 8px;
+    background: rgba(23, 26, 32, 0.92);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
+}
+
+.setup-card {
+    padding: 18px 18px 16px;
+}
+
+.setup-card h2,
+.section-title h2 {
+    margin: 0 0 14px;
+    font-size: 17px;
+    line-height: 1.3;
+}
+
+.side-panel {
+    padding: 16px;
+}
+
+.chat-panel {
+    padding: 0;
+    overflow: hidden;
+}
+
+.workspace-grid {
+    align-items: stretch;
+}
+
+.workspace-grid > .gradio-column:first-child {
+    min-width: 0;
+}
+
+.workspace-grid > .gradio-column:last-child {
+    min-width: 360px;
+}
+
+.scene-info textarea {
+    min-height: 210px !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    line-height: 1.55 !important;
+}
+
+.render-preview {
+    margin-top: 14px;
+}
+
+.render-preview .image-container,
+.render-preview img {
+    border-radius: 6px !important;
+}
+
+.primary-actions button {
+    min-height: 44px;
+    font-weight: 650;
+}
+
+.secondary-actions button {
+    min-height: 38px;
+}
+
+.gradio-container label,
+.gradio-container .block .label-wrap span {
+    color: #dce3ec !important;
+}
+
+.gradio-container input,
+.gradio-container textarea,
+.gradio-container select {
+    border-color: var(--gosim-border) !important;
+    background: #121414 !important;
+    color: var(--gosim-text) !important;
+}
+
+.gradio-container button.primary,
+.gradio-container button[variant="primary"] {
+    border: 0 !important;
+    background: linear-gradient(180deg, #7ee1b6, #43bd88) !important;
+    color: #07130e !important;
+}
+
+.gradio-container button.secondary,
+.gradio-container button[variant="secondary"] {
+    border-color: var(--gosim-border) !important;
+    background: #242724 !important;
+    color: #edf2f8 !important;
+}
+
+footer {
+    border-top: 1px solid var(--gosim-border-soft) !important;
+    background: rgba(15, 17, 21, 0.86) !important;
+}
+
+@media (max-width: 980px) {
+    .gradio-container {
+        padding: 18px !important;
+    }
+
+    .workspace-grid > .gradio-column:last-child {
+        min-width: 0;
+    }
+}
+"""
+
 def create_ui():
     """
     创建Gradio UI界面
@@ -54,14 +211,18 @@ def create_ui():
     session_id = f"session_{int(time.time())}"
     globals.session_id = session_id
     
-    with gr.Blocks(title="GOSIM Infinigen Blender Agent") as app:
-        # 标题和说明
-        gr.Markdown("## GOSIM Infinigen Blender Agent")
-        gr.Markdown("使用 LLM Function Call 操作 Blender / Infinigen 场景")
-        
-        # 创建聊天界面组件
-        # 返回的chat_components包含所有UI元素的引用，用于后续事件处理
-        chat_components = create_chat_tab(session_id)
+    with gr.Blocks(
+        title="GOSIM Infinigen Blender Agent",
+        css=CUSTOM_CSS,
+        elem_id="gosim-shell",
+    ) as app:
+        gr.Markdown("## GOSIM Infinigen Blender Agent", elem_classes=["app-title"])
+        gr.Markdown(
+            "使用 LLM Function Call 操作 Blender / Infinigen 场景",
+            elem_classes=["app-subtitle"],
+        )
+
+        create_chat_tab(session_id)
       
     
     return app 
