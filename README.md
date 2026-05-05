@@ -1,5 +1,6 @@
 # Gosim2026-Paris
 
+<<<<<<< HEAD
 Standalone natural-language Blender agent for editing Infinigen scenes.
 
 这个工程现在是一个完整独立工程，不再依赖外部的
@@ -179,3 +180,6 @@ python -m gosim_blender_agent.cli generate-bedroom \
 - Blender addon: `addon.py`
 
 只要这个目录完整拷走，Python 依赖装好，就不需要再依赖外部项目目录。
+=======
+# begin 5th May 11:10AM
+>>>>>>> 537693ea31a6a776b40e80c29ef6142cf289a351
