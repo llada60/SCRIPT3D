@@ -151,14 +151,28 @@ Visual Verifier 是独立 agent，不新增 Blender socket 命令。配置文件
 {
   "agents": {
     "code_generator": {
-      "model_type": "r9s"
+      "model_type": "r9s_code"
     },
     "visual_verifier": {
-      "model_type": "r9s"
+      "model_type": "r9s_visual_verifier"
+    }
+  },
+  "llm": {
+    "r9s_code": {
+      "provider": "r9s",
+      "model": "deepseek-v4-pro",
+      "api_base": "https://api.r9s.ai/v1"
+    },
+    "r9s_visual_verifier": {
+      "provider": "r9s",
+      "model": "claude-opus-4-6",
+      "api_base": "https://api.r9s.ai/v1"
     }
   }
 }
 ```
+
+`model_type` 可以是内置 provider 名称，例如 `r9s`，也可以是 `llm` 下面的自定义配置名，例如 `r9s_code`。自定义配置建议显式写 `provider`，用于指定底层 API 适配器。
 
 UI 初始化时也可以分别选择 Code Generator 模型和 Visual Verifier 模型。Verifier 输入包括：
 
