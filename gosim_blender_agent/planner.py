@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .asset_registry import resolve_asset
+from .asset_registry import resolve_asset, resolve_material
 
 
 @dataclass(frozen=True)
@@ -210,7 +210,8 @@ class RulePlanner:
 
     def _plan_material(self, text: str) -> Action | None:
         lowered = text.lower()
-        if not any(key in lowered for key in ("颜色", "材质", "变成", "color", "material")):
+        material = resolve_material(text)
+        if not material and not any(key in lowered for key in ("颜色", "材质", "变成", "make", "color", "material")):
             return None
         colors = {
             "红": "red",
@@ -225,10 +226,26 @@ class RulePlanner:
             "white": "white",
             "black": "black",
             "wood": "wood",
+            "wooden": "wood",
+            "ceramic": "ceramic",
+            "glass": "glass",
+            "marble": "marble",
+            "tile": "tile",
+            "tiles": "advanced_tiles",
+            "metal": "metal",
+            "metallic": "metal",
+            "aluminum": "aluminum",
+            "aluminium": "aluminum",
+            "brushed metal": "brushed_metal",
+            "plastic": "plastic",
+            "black plastic": "black_plastic",
+            "rubber": "rubber",
         }
         color = None
+        if material:
+            color = material.category
         for key, value in colors.items():
-            if key in lowered:
+            if color is None and key in lowered:
                 color = value
                 break
         return Action("set_material", {"target": self._extract_target(text) or text, "color": color})
@@ -253,11 +270,28 @@ class RulePlanner:
             "white": "white",
             "black": "black",
             "wood": "wood",
+            "wooden": "wood",
+            "ceramic": "ceramic",
+            "glass": "glass",
+            "marble": "marble",
+            "tile": "tile",
+            "tiles": "advanced_tiles",
+            "metal": "metal",
+            "metallic": "metal",
+            "aluminum": "aluminum",
+            "aluminium": "aluminum",
+            "brushed metal": "brushed_metal",
+            "plastic": "plastic",
+            "black plastic": "black_plastic",
+            "rubber": "rubber",
         }
         lowered = text.lower()
         hex_match = re.search(r"#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?", text)
         if hex_match:
             return hex_match.group(0)
+        material = resolve_material(text)
+        if material:
+            return material.category
         for key, value in colors.items():
             if key in lowered:
                 return value

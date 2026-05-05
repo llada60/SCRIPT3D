@@ -74,6 +74,9 @@ def _format_user_chat_content(input_value):
     """Use plain text for text-only messages so the chatbot renders them reliably."""
     input_value = input_value or {}
     text = input_value.get("text", "")
+    display_prefix = input_value.get("display_prefix", "")
+    if display_prefix:
+        text = f"{display_prefix}: {text}"
     files = input_value.get("files") or []
     if not files:
         return text
@@ -124,6 +127,8 @@ def _format_tool_result_details(function_result: Dict[str, Any]) -> str:
 def submit(input_value, chatbot_value):
     """处理聊天提交事件"""
     chatbot_value = chatbot_value or []
+    input_value = input_value or {}
+    operation_label = input_value.get("operation_label", "")
 
     # 获取当前Agent
     agent = get_agent()
@@ -149,7 +154,7 @@ def submit(input_value, chatbot_value):
         llm_user_message = (input_value or {}).get("text", "")
         
         # 如果有文件，添加到用户消息
-        input_files = (input_value or {}).get("files") or []
+        input_files = input_value.get("files") or []
         if input_files:
             llm_user_message = [
                 {"type": "text", "text": llm_user_message},
@@ -159,7 +164,7 @@ def submit(input_value, chatbot_value):
         # 自动生成的最大轮数
         max_auto_rounds = 10
         current_rounds = 0
-        original_user_text = (input_value or {}).get("text", "")
+        original_user_text = input_value.get("text", "")
         
         # 循环生成，直到收到"完成"开头的回复或达到最大轮数
         while current_rounds < max_auto_rounds:
@@ -183,7 +188,9 @@ def submit(input_value, chatbot_value):
                 if content_chunk:
                     response_content += content_chunk
                     if "content" not in chatbot_value[-1] or chatbot_value[-1]["content"] is None:
-                        chatbot_value[-1]["content"] = content_chunk
+                        chatbot_value[-1]["content"] = (
+                            f"{operation_label}: {content_chunk}" if operation_label else content_chunk
+                        )
                     else:
                         chatbot_value[-1]["content"] += content_chunk
                 
@@ -193,10 +200,13 @@ def submit(input_value, chatbot_value):
                     # 检查是否是新的函数调用
                     if function_name != current_function:
                         current_function = function_name
+                        running_text = f"Running: {function_name}..."
+                        if operation_label:
+                            running_text = f"{operation_label}: {running_text}"
                         if "content" not in chatbot_value[-1] or chatbot_value[-1]["content"] is None:
-                            chatbot_value[-1]["content"] = f"Running: {function_name}..."
+                            chatbot_value[-1]["content"] = running_text
                         else:
-                            chatbot_value[-1]["content"] += f"\nRunning: {function_name}..."
+                            chatbot_value[-1]["content"] += f"\n{running_text}"
                 
                 # 如果有函数调用结果，添加函数调用结果到当前消息
                 if function_result:
@@ -326,8 +336,9 @@ def submit_with_view(
     current_image_path = image_update
 
     for iteration in range(1, max_iterations + 1):
+        loop_label = f"Verifier: loop {iteration}/{max_iterations}"
         chatbot_value.append(verifier_message(
-            f"Visual Verifier is checking render {iteration}/{max_iterations}...",
+            f"{loop_label}: checking the latest render...",
             loading=True,
             status="pending",
         ))
@@ -335,7 +346,7 @@ def submit_with_view(
 
         visual_verifier = getattr(agent, "visual_verifier", None)
         if visual_verifier is None:
-            chatbot_value[-1]["content"] = "Visual Verifier is not initialized. Please initialize the Agent again."
+            chatbot_value[-1]["content"] = f"{loop_label}: Visual Verifier is not initialized. Please initialize the Agent again."
             chatbot_value[-1]["loading"] = False
             chatbot_value[-1]["status"] = "done"
             yield gr.update(loading=False), gr.update(value=chatbot_value), gr.update(), gr.update()
@@ -345,22 +356,22 @@ def submit_with_view(
         reason = verdict.reason or "No reason provided."
         instruction = verdict.instruction or ""
         if verdict.done:
-            chatbot_value[-1]["content"] = f"Visual Verifier: the result is acceptable. Reason: {reason}"
+            chatbot_value[-1]["content"] = f"{loop_label}: the result is acceptable. Reason: {reason}"
             chatbot_value[-1]["loading"] = False
             chatbot_value[-1]["status"] = "done"
             yield gr.update(loading=False), gr.update(value=chatbot_value), gr.update(), gr.update()
             break
 
         chatbot_value[-1]["content"] = (
-            f"Visual Verifier: more adjustment is needed. Reason: {reason}\n\n"
-            f"Instruction for the code generator: {instruction}"
+            f"{loop_label}: more adjustment is needed. Reason: {reason}\n\n"
+            f"{loop_label}: instruction for the code generator: {instruction}"
         )
         chatbot_value[-1]["loading"] = False
         chatbot_value[-1]["status"] = "done"
         yield gr.update(loading=False), gr.update(value=chatbot_value), gr.update(), gr.update()
 
         generator_instruction = (
-            "The visual verifier proposed the following adjustment based on the latest render. "
+            f"{loop_label}: the visual verifier proposed the following adjustment based on the latest render. "
             "Use only Blender tool calls to fix prompt consistency, basic physics, or practical plausibility. "
             "If the render is too dark or the camera is too far to verify, you may move/adjust existing Light or Camera objects, but do not add new lights or unrequested objects. "
             "Do not optimize lighting, camera, composition, materials, or render style for subjective aesthetics. "
@@ -369,7 +380,14 @@ def submit_with_view(
             f"Original user goal: {user_goal}\n"
             f"{instruction}"
         )
-        for input_update, chat_update in submit({"text": generator_instruction, "files": []}, chatbot_value):
+        for input_update, chat_update in submit(
+            {
+                "text": generator_instruction,
+                "files": [],
+                "operation_label": loop_label,
+            },
+            chatbot_value,
+        ):
             last_input_update = input_update
             last_chat_update = chat_update
             yield input_update, chat_update, gr.update(), gr.update()

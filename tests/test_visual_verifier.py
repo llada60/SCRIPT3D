@@ -67,6 +67,40 @@ class VisualVerifierScopeGuardTest(unittest.TestCase):
         self.assertEqual(result.reason, "场景中缺少凳子，且有未要求的苹果。")
         self.assertEqual(result.instruction, "添加一个凳子，并删除苹果。")
 
+    def test_keeps_lighting_repair_when_render_is_too_dark_to_confirm_edit(self):
+        result = VisualVerifierAgent._apply_scope_guard(
+            r"\editing make the desk purple",
+            VisualVerifierResult(
+                done=False,
+                reason="The desk appears dark/black, not purple. The scene is too dark to confirm color.",
+                instruction="Adjust the lighting so the desk color can be verified.",
+            ),
+        )
+
+        self.assertFalse(result.done)
+        self.assertEqual(
+            result.reason,
+            "The desk appears dark/black, not purple. The scene is too dark to confirm color.",
+        )
+        self.assertEqual(result.instruction, "Adjust the lighting so the desk color can be verified.")
+
+    def test_rejects_done_when_reason_says_render_cannot_be_verified(self):
+        result = VisualVerifierAgent._apply_scope_guard(
+            r"\editing make the desk purple",
+            VisualVerifierResult(
+                done=True,
+                reason="The scene is too dark to confirm whether the desk is purple.",
+                instruction="",
+            ),
+        )
+
+        self.assertFalse(result.done)
+        self.assertEqual(result.reason, "The scene is too dark to confirm whether the desk is purple.")
+        self.assertEqual(
+            result.instruction,
+            "Move or adjust an existing Light in the scene so prompt-related objects and requested attributes are recognizable; do not add a new light.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

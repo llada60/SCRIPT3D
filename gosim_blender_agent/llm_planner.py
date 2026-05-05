@@ -27,13 +27,13 @@ Allowed tools:
 - save_blend {}
 - render_scene {}
 - adjust_camera_from_render {"target": "object/category/name", "target_fill": 0.72}
-- add_infinigen_asset {"category_or_factory": "bed|desk|table|side_table|desk_lamp|chair|sofa|cabinet|bookcase|rug|plant|apple|blackberry|green_coconut|hairy_coconut|durian|pineapple|starfruit|strawberry|compositional_fruit", "scale": 1.0}
-- edit_generated_asset {"target": "object/category/name", "prompt": "full editing instruction", "color": "red|blue|green|white|black|wood|#RRGGBB", "preserve_size": true}
+- add_infinigen_asset {"category_or_factory": "bed|bed_frame|mattress|pillow|desk|table|side_table|coffee_table|desk_lamp|floor_lamp|chair|bar_chair|office_chair|sofa|armchair|cabinet|bookcase|rug|plant|beverage_fridge|dishwasher|microwave|oven|tv|monitor|apple|blackberry|green_coconut|hairy_coconut|durian|pineapple|starfruit|strawberry|compositional_fruit", "scale": 1.0}
+- edit_generated_asset {"target": "object/category/name", "prompt": "full editing instruction", "color": "red|blue|green|white|black|wood|ceramic|glass|marble|tile|advanced_tiles|metal|aluminum|brushed_metal|plastic|black_plastic|rubber|#RRGGBB", "preserve_size": true}
 - move_object {"target": "object/category/name", "direction": "left|right|front|back|up|down", "distance": 0.3}
 - scale_object {"target": "object/category/name", "factor": 1.2}
 - rotate_object {"target": "object/category/name", "axis": "x|y|z", "angle_degrees": 90}
 - delete_object {"target": "object/category/name"}
-- set_material {"target": "object/category/name", "color": "red|blue|green|white|black|wood|#RRGGBB"}
+- set_material {"target": "object/category/name", "color": "red|blue|green|white|black|wood|ceramic|glass|marble|tile|advanced_tiles|metal|aluminum|brushed_metal|plastic|black_plastic|rubber|#RRGGBB"}
 - place_on {"source": "object/category/name", "target": "object/category/name"}
 - place_near {"source": "object/category/name", "target": "object/category/name", "side": "left|right|front|back", "gap": 0.25}
 - place_against_wall {"target": "object/category/name"}

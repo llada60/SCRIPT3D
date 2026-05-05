@@ -104,6 +104,28 @@ VISIBILITY_REPAIR_KEYWORDS = (
     "现有灯",
     "已有 camera",
     "现有 camera",
+    "too dark",
+    "too dim",
+    "underexposed",
+    "hard to see",
+    "difficult to see",
+    "cannot see",
+    "can't see",
+    "not visible",
+    "cannot recognize",
+    "can't recognize",
+    "cannot identify",
+    "can't identify",
+    "cannot confirm",
+    "can't confirm",
+    "cannot verify",
+    "can't verify",
+    "unable to confirm",
+    "unable to verify",
+    "hard to confirm",
+    "difficult to confirm",
+    "cropped",
+    "too far",
 )
 
 ADD_LIGHT_KEYWORDS = (
@@ -421,11 +443,32 @@ class VisualVerifierAgent:
         return "；".join(kept).strip()
 
     @classmethod
+    def _has_visibility_repair_issue(cls, result: VisualVerifierResult) -> bool:
+        combined = f"{result.reason or ''}\n{result.instruction or ''}"
+        return cls._contains_any(combined, VISIBILITY_REPAIR_KEYWORDS)
+
+    @classmethod
+    def _visibility_repair_instruction(cls, result: VisualVerifierResult) -> str:
+        instruction = result.instruction or ""
+        combined = f"{result.reason or ''}\n{instruction}"
+        lowered = combined.lower()
+        if any(keyword in lowered for keyword in ("camera", "相机", "镜头", "cropped", "too far", "裁切", "太远", "过远")):
+            return "Adjust the existing Camera so all prompt-related objects are recognizable and not cropped."
+        return "Move or adjust an existing Light in the scene so prompt-related objects and requested attributes are recognizable; do not add a new light."
+
+    @classmethod
     def _apply_scope_guard(
         cls,
         user_goal: str,
         result: VisualVerifierResult,
     ) -> VisualVerifierResult:
+        if result.done and cls._has_visibility_repair_issue(result):
+            return VisualVerifierResult(
+                done=False,
+                reason=result.reason or "The render is not recognizable enough to verify the prompt.",
+                instruction=cls._visibility_repair_instruction(result),
+            )
+
         if result.done or not result.instruction:
             return result
 
@@ -469,8 +512,7 @@ class VisualVerifierAgent:
                 instruction="Do not add a new light; only move or adjust an existing Light in the scene so prompt-related objects are recognizable.",
             )
 
-        has_visibility_repair = cls._contains_any(combined, VISIBILITY_REPAIR_KEYWORDS)
-        if has_visibility_repair:
+        if cls._has_visibility_repair_issue(result):
             return result
 
         has_out_of_scope_terms = cls._contains_any(instruction, OUT_OF_SCOPE_VERIFIER_KEYWORDS)
