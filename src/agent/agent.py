@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 import logging
+import time
+import uuid
 from typing import Any, Dict, Iterator, List, Optional, Union
 
 from ..blender.client import BlenderClient
@@ -23,6 +25,9 @@ logger = logging.getLogger(__name__)
 
 PHYSICAL_RULES_PROMPT = """你是 Blender/Infinigen 场景编辑 planner。
 遵守这些写死的物理规则：
+- 把cube删掉
+- 不要乱加东西
+- 符合物理常识，例如：家具通常放在地面上，台灯通常放在桌子上，椅子
 - 不要让对象悬空；空间编辑后对被编辑对象调用 apply_physics_rules，再调用 rebuild_scene_index。
 - 表达“放到上面”时优先用 place_on，不要用裸 move_object。
 - 表达“旁边/靠墙”时优先用 place_near/place_against_wall。
@@ -39,6 +44,8 @@ class BlenderAgent:
         self.llm = llm
         self.blender_client = blender_client
         self.messages: list[dict[str, Any]] = [{"role": "system", "content": PHYSICAL_RULES_PROMPT}]
+        self.current_run_id: str | None = None
+        self._last_cancel_check = 0.0
         self._init_functions()
 
     def update_blender_client(self, blender_client: BlenderClient):
@@ -264,6 +271,9 @@ class BlenderAgent:
         if not hasattr(self.llm, "chat_stream"):
             raise NotImplementedError("当前 LLM 不支持流式响应")
 
+        self.current_run_id = uuid.uuid4().hex
+        self._last_cancel_check = 0.0
+        self._set_agent_status("running", "LLM 正在生成回复", operation="llm")
         response_stream = self.llm.chat_stream(
             messages=self.messages,
             functions=functions_to_use,
@@ -272,31 +282,50 @@ class BlenderAgent:
 
         accumulated_content = ""
         function_call = None
-        for chunk in response_stream:
-            content_chunk = chunk.get("content")
-            function_call_chunk = chunk.get("function_call")
-            if content_chunk:
-                accumulated_content += content_chunk
-            if function_call_chunk:
-                function_call = function_call_chunk
-            yield chunk
+        try:
+            for chunk in response_stream:
+                self._raise_if_blender_cancelled()
+                content_chunk = chunk.get("content")
+                function_call_chunk = chunk.get("function_call")
+                if content_chunk:
+                    accumulated_content += content_chunk
+                if function_call_chunk:
+                    function_call = function_call_chunk
+                yield chunk
 
-        if accumulated_content:
-            self.add_message("assistant", accumulated_content)
-        elif function_call:
-            self.add_message("assistant", f"我将执行工具: {function_call['name']}")
+            self._raise_if_blender_cancelled(force=True)
 
-        if function_call:
-            function_result = self._execute_function(function_call)
-            self.add_message(
-                "user",
-                f"函数 {function_call['name']} 的执行结果: {json.dumps(function_result, ensure_ascii=False)}",
-            )
+            if accumulated_content:
+                self.add_message("assistant", accumulated_content)
+            elif function_call:
+                self.add_message("assistant", f"我将执行工具: {function_call['name']}")
+
+            if function_call:
+                function_result = self._execute_function(function_call)
+                self.add_message(
+                    "user",
+                    f"函数 {function_call['name']} 的执行结果: {json.dumps(function_result, ensure_ascii=False)}",
+                )
+                yield {
+                    "content": None,
+                    "function_call": function_call,
+                    "function_result": function_result,
+                }
+        except GeneratorExit:
+            self._set_agent_status("cancelled", "UI 已停止 Agent 运行")
+            raise
+        except RuntimeError as exc:
+            if str(exc) != "Agent run cancelled from Blender":
+                raise
+            self._set_agent_status("cancelled", "Blender 已请求停止 Agent 运行")
             yield {
-                "content": None,
-                "function_call": function_call,
-                "function_result": function_result,
+                "content": "已停止运行。",
+                "function_call": None,
+                "function_result": {"status": "cancelled", "message": "Blender 已请求停止 Agent 运行"},
             }
+        finally:
+            if self.current_run_id:
+                self.current_run_id = None
 
     def _execute_function(self, function_call: Dict[str, Any]) -> Dict[str, Any]:
         try:
@@ -310,14 +339,51 @@ class BlenderAgent:
             if not hasattr(self.blender_client, function_name):
                 return {"status": "error", "message": f"函数 {function_name} 不存在"}
 
+            self._raise_if_blender_cancelled(force=True)
+            self._set_agent_status("running", f"正在 Blender 中执行：{function_name}", operation=function_name)
             func = getattr(self.blender_client, function_name)
             logger.info("执行函数: %s, 参数: %s", function_name, arguments)
             result = func(**arguments)
             logger.info("函数执行结果: %s", result)
+            self._raise_if_blender_cancelled(force=True)
             return result
+        except RuntimeError as exc:
+            if str(exc) == "Agent run cancelled from Blender":
+                raise
+            logger.error("执行函数 %s 时出错: %s", function_call.get("name", "未知"), exc)
+            return {"status": "error", "message": f"执行函数时出错: {exc}"}
         except Exception as exc:
             logger.error("执行函数 %s 时出错: %s", function_call.get("name", "未知"), exc)
             return {"status": "error", "message": f"执行函数时出错: {exc}"}
+
+    def _set_agent_status(self, state: str, message: str = "", operation: str | None = None) -> None:
+        if self.blender_client is None or not hasattr(self.blender_client, "set_agent_status"):
+            return
+        try:
+            self.blender_client.set_agent_status(
+                state=state,
+                message=message,
+                run_id=self.current_run_id,
+                operation=operation,
+            )
+        except Exception as exc:
+            logger.debug("同步 Agent 状态到 Blender 失败: %s", exc)
+
+    def _raise_if_blender_cancelled(self, force: bool = False) -> None:
+        if self.blender_client is None or not hasattr(self.blender_client, "get_agent_status"):
+            return
+        now = time.monotonic()
+        if not force and now - self._last_cancel_check < 0.5:
+            return
+        self._last_cancel_check = now
+        try:
+            status = self.blender_client.get_agent_status()
+        except Exception as exc:
+            logger.debug("读取 Blender Agent 状态失败: %s", exc)
+            return
+        result = status.get("result", status)
+        if isinstance(result, dict) and result.get("cancel_requested"):
+            raise RuntimeError("Agent run cancelled from Blender")
 
     def update_blender_client(self, blender_client: BlenderClient):
         self.blender_client = blender_client
