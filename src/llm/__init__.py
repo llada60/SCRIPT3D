@@ -62,14 +62,16 @@ class LLMFactory:
         Returns:
             LLM实例
         """
-        provider_type = LLMFactory.resolve_provider_type(model_type, config)
-        llm_class = LLM_MODELS[provider_type]
+        if model_type not in LLM_MODELS:
+            raise ValueError(f"不支持的LLM类型: {model_type}，支持的类型有: {', '.join(LLM_MODELS.keys())}")
+            
+        llm_class = LLM_MODELS[model_type]
         api_key = config.get("api_key", "")
         model = config.get("model", "")
 
         # 额外参数
-        kwargs = {k: v for k, v in config.items() if k not in ["api_key", "model", "provider", "type"]}
-
+        kwargs = {k: v for k, v in config.items() if k not in ["api_key", "model"]}
+        
         return llm_class(api_key=api_key, model=model, **kwargs)
 
     @staticmethod
@@ -100,7 +102,7 @@ class LLMFactory:
 
         if model_type not in llm_config:
             raise ValueError(f"配置文件中未找到模型类型: {model_type}")
-
+            
         # 创建LLM实例
         model_config = llm_config.get(model_type, {})
         return LLMFactory.create_llm(model_type, model_config)
