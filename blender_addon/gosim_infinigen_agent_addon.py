@@ -47,6 +47,12 @@ AGENT_STATUS: dict[str, Any] = {
 ASSET_FACTORY_ALIASES = {
     "bed": "infinigen.assets.objects.seating.BedFactory",
     "床": "infinigen.assets.objects.seating.BedFactory",
+    "bed_frame": "infinigen.assets.objects.seating.BedFrameFactory",
+    "bed frame": "infinigen.assets.objects.seating.BedFrameFactory",
+    "bedframe": "infinigen.assets.objects.seating.BedFrameFactory",
+    "mattress": "infinigen.assets.objects.seating.MattressFactory",
+    "pillow": "infinigen.assets.objects.seating.PillowFactory",
+    "cushion": "infinigen.assets.objects.seating.PillowFactory",
     "desk": "infinigen.assets.objects.shelves.SimpleDeskFactory",
     "书桌": "infinigen.assets.objects.shelves.SimpleDeskFactory",
     "桌子": "infinigen.assets.objects.shelves.SimpleDeskFactory",
@@ -59,9 +65,31 @@ ASSET_FACTORY_ALIASES = {
     "台灯": "infinigen.assets.objects.lamp.DeskLampFactory",
     "chair": "infinigen.assets.objects.seating.chairs.ChairFactory",
     "椅子": "infinigen.assets.objects.seating.chairs.ChairFactory",
+    "bar_chair": "infinigen.assets.objects.seating.chairs.BarChairFactory",
+    "bar chair": "infinigen.assets.objects.seating.chairs.BarChairFactory",
+    "bar stool": "infinigen.assets.objects.seating.chairs.BarChairFactory",
+    "stool": "infinigen.assets.objects.seating.chairs.BarChairFactory",
     "office_chair": "infinigen.assets.objects.seating.chairs.OfficeChairFactory",
+    "office chair": "infinigen.assets.objects.seating.chairs.OfficeChairFactory",
     "sofa": "infinigen.assets.objects.seating.SofaFactory",
     "沙发": "infinigen.assets.objects.seating.SofaFactory",
+    "armchair": "infinigen.assets.objects.seating.ArmChairFactory",
+    "arm chair": "infinigen.assets.objects.seating.ArmChairFactory",
+    "lounge chair": "infinigen.assets.objects.seating.ArmChairFactory",
+    "beverage_fridge": "infinigen.assets.objects.appliances.BeverageFridgeFactory",
+    "beverage fridge": "infinigen.assets.objects.appliances.BeverageFridgeFactory",
+    "drink fridge": "infinigen.assets.objects.appliances.BeverageFridgeFactory",
+    "mini fridge": "infinigen.assets.objects.appliances.BeverageFridgeFactory",
+    "fridge": "infinigen.assets.objects.appliances.BeverageFridgeFactory",
+    "dishwasher": "infinigen.assets.objects.appliances.DishwasherFactory",
+    "microwave": "infinigen.assets.objects.appliances.MicrowaveFactory",
+    "microwave oven": "infinigen.assets.objects.appliances.MicrowaveFactory",
+    "oven": "infinigen.assets.objects.appliances.OvenFactory",
+    "tv": "infinigen.assets.objects.appliances.TVFactory",
+    "television": "infinigen.assets.objects.appliances.TVFactory",
+    "monitor": "infinigen.assets.objects.appliances.MonitorFactory",
+    "computer monitor": "infinigen.assets.objects.appliances.MonitorFactory",
+    "display": "infinigen.assets.objects.appliances.MonitorFactory",
     "cabinet": "infinigen.assets.objects.shelves.SingleCabinetFactory",
     "柜子": "infinigen.assets.objects.shelves.SingleCabinetFactory",
     "bookcase": "infinigen.assets.objects.shelves.SimpleBookcaseFactory",
@@ -102,14 +130,91 @@ ASSET_FACTORY_ALIASES = {
 }
 
 
+MATERIAL_ALIASES = {
+    "wood": "infinigen.assets.materials.wood.Wood",
+    "wooden": "infinigen.assets.materials.wood.Wood",
+    "natural wood": "infinigen.assets.materials.wood.Wood",
+    "hardwood_floor": "infinigen.assets.materials.wood.HardwoodFloor",
+    "hardwood floor": "infinigen.assets.materials.wood.HardwoodFloor",
+    "table_wood": "infinigen.assets.materials.wood.TableWood",
+    "table wood": "infinigen.assets.materials.wood.TableWood",
+    "plywood": "infinigen.assets.materials.wood.BlondePlywood",
+    "blonde plywood": "infinigen.assets.materials.wood.BlondePlywood",
+    "white_plywood": "infinigen.assets.materials.wood.WhitePlywood",
+    "white plywood": "infinigen.assets.materials.wood.WhitePlywood",
+    "black_plywood": "infinigen.assets.materials.wood.BlackPlywood",
+    "black plywood": "infinigen.assets.materials.wood.BlackPlywood",
+    "wood_tile": "infinigen.assets.materials.wood.wood_tile.WoodTiles",
+    "wood tile": "infinigen.assets.materials.wood.wood_tile.WoodTiles",
+    "wood tiles": "infinigen.assets.materials.wood.wood_tile.WoodTiles",
+    "ceramic": "infinigen.assets.materials.ceramic.Ceramic",
+    "glazed ceramic": "infinigen.assets.materials.ceramic.Ceramic",
+    "brick": "infinigen.assets.materials.ceramic.Brick",
+    "ceramic brick": "infinigen.assets.materials.ceramic.Brick",
+    "concrete": "infinigen.assets.materials.ceramic.Concrete",
+    "glass": "infinigen.assets.materials.ceramic.Glass",
+    "marble": "infinigen.assets.materials.ceramic.Marble",
+    "plaster": "infinigen.assets.materials.ceramic.Plaster",
+    "tile": "infinigen.assets.materials.ceramic.Tile",
+    "ceramic tile": "infinigen.assets.materials.ceramic.Tile",
+    "advanced_tiles": "infinigen.assets.materials.tiles.advanced_tiles.apply",
+    "tiles": "infinigen.assets.materials.tiles.advanced_tiles.apply",
+    "patterned tiles": "infinigen.assets.materials.tiles.advanced_tiles.apply",
+    "metal": "infinigen.assets.materials.metal.MetalBasic",
+    "metallic": "infinigen.assets.materials.metal.MetalBasic",
+    "aluminum": "infinigen.assets.materials.metal.Aluminum",
+    "aluminium": "infinigen.assets.materials.metal.Aluminum",
+    "brushed_metal": "infinigen.assets.materials.metal.BrushedMetal",
+    "brushed metal": "infinigen.assets.materials.metal.BrushedMetal",
+    "galvanized_metal": "infinigen.assets.materials.metal.GalvanizedMetal",
+    "galvanized metal": "infinigen.assets.materials.metal.GalvanizedMetal",
+    "grained_metal": "infinigen.assets.materials.metal.GrainedMetal",
+    "grained metal": "infinigen.assets.materials.metal.GrainedMetal",
+    "polished metal": "infinigen.assets.materials.metal.GrainedMetal",
+    "hammered_metal": "infinigen.assets.materials.metal.HammeredMetal",
+    "hammered metal": "infinigen.assets.materials.metal.HammeredMetal",
+    "mirror": "infinigen.assets.materials.metal.Mirror",
+    "mirrored metal": "infinigen.assets.materials.metal.Mirror",
+    "black_glass": "infinigen.assets.materials.metal.BlackGlass",
+    "black glass": "infinigen.assets.materials.metal.BlackGlass",
+    "black_metal": "infinigen.assets.materials.metal.BrushedBlackMetal",
+    "black metal": "infinigen.assets.materials.metal.BrushedBlackMetal",
+    "brushed black metal": "infinigen.assets.materials.metal.BrushedBlackMetal",
+    "white_metal": "infinigen.assets.materials.metal.WhiteMetal",
+    "white metal": "infinigen.assets.materials.metal.WhiteMetal",
+    "plastic": "infinigen.assets.materials.plastic.Plastic",
+    "black_plastic": "infinigen.assets.materials.plastic.BlackPlastic",
+    "black plastic": "infinigen.assets.materials.plastic.BlackPlastic",
+    "rough_plastic": "infinigen.assets.materials.plastic.PlasticRough",
+    "rough plastic": "infinigen.assets.materials.plastic.PlasticRough",
+    "translucent_plastic": "infinigen.assets.materials.plastic.PlasticTranslucent",
+    "translucent plastic": "infinigen.assets.materials.plastic.PlasticTranslucent",
+    "clear plastic": "infinigen.assets.materials.plastic.PlasticTranslucent",
+    "rubber": "infinigen.assets.materials.plastic.BumpyRubberFloor",
+    "bumpy rubber": "infinigen.assets.materials.plastic.BumpyRubberFloor",
+}
+
+
 CATEGORY_ALIASES = {
     "bed": ("bed", "床"),
+    "bed_frame": ("bed_frame", "bed frame", "bedframe"),
+    "mattress": ("mattress",),
+    "pillow": ("pillow", "cushion"),
     "desk": ("desk", "simpledesk", "书桌", "办公桌"),
     "table": ("table", "桌", "餐桌", "sidetable", "coffeetable"),
     "side_table": ("side_table", "sidetable", "nightstand", "床头柜", "边几"),
     "lamp": ("lamp", "light", "台灯", "灯"),
     "chair": ("chair", "椅"),
+    "bar_chair": ("bar_chair", "bar chair", "bar stool", "stool"),
+    "office_chair": ("office_chair", "office chair"),
     "sofa": ("sofa", "沙发"),
+    "armchair": ("armchair", "arm chair", "lounge chair"),
+    "beverage_fridge": ("beverage_fridge", "beverage fridge", "drink fridge", "mini fridge", "fridge"),
+    "dishwasher": ("dishwasher",),
+    "microwave": ("microwave", "microwave oven"),
+    "oven": ("oven",),
+    "tv": ("tv", "television"),
+    "monitor": ("monitor", "computer monitor", "display"),
     "cabinet": ("cabinet", "柜"),
     "bookcase": ("bookcase", "shelf", "书架"),
     "rug": ("rug", "地毯"),
@@ -142,6 +247,7 @@ DEFAULT_ASSET_SCALES = {
     "starfruit": 0.10,
     "strawberry": 0.15,
     "compositional_fruit": 0.12,
+    "pillow": 0.35,
 }
 
 MAX_ASSET_DIMENSIONS = {
@@ -205,6 +311,49 @@ COLOR_ALIASES = {
     "黑": "black",
     "黑色": "black",
     "wood": "wood",
+    "wooden": "wood",
+    "natural wood": "wood",
+    "hardwood floor": "hardwood_floor",
+    "table wood": "table_wood",
+    "plywood": "plywood",
+    "white plywood": "white_plywood",
+    "black plywood": "black_plywood",
+    "wood tile": "wood_tile",
+    "wood tiles": "wood_tile",
+    "ceramic": "ceramic",
+    "glazed ceramic": "ceramic",
+    "brick": "brick",
+    "ceramic brick": "brick",
+    "concrete": "concrete",
+    "glass": "glass",
+    "marble": "marble",
+    "plaster": "plaster",
+    "tile": "tile",
+    "ceramic tile": "tile",
+    "tiles": "advanced_tiles",
+    "patterned tiles": "advanced_tiles",
+    "metal": "metal",
+    "metallic": "metal",
+    "aluminum": "aluminum",
+    "aluminium": "aluminum",
+    "brushed metal": "brushed_metal",
+    "galvanized metal": "galvanized_metal",
+    "grained metal": "grained_metal",
+    "polished metal": "grained_metal",
+    "hammered metal": "hammered_metal",
+    "mirror": "mirror",
+    "mirrored metal": "mirror",
+    "black glass": "black_glass",
+    "black metal": "black_metal",
+    "brushed black metal": "black_metal",
+    "white metal": "white_metal",
+    "plastic": "plastic",
+    "black plastic": "black_plastic",
+    "rough plastic": "rough_plastic",
+    "translucent plastic": "translucent_plastic",
+    "clear plastic": "translucent_plastic",
+    "rubber": "rubber",
+    "bumpy rubber": "rubber",
     "木": "wood",
     "木色": "wood",
 }
@@ -540,13 +689,25 @@ def _category_from_text(text: str, obj_type: str = "") -> str:
 def _category_from_asset_request(request: str, factory_path: str) -> str:
     lowered = f"{request} {factory_path}".lower()
     priority = (
+        ("bed_frame", ("bedframefactory", "bed_frame", "bed frame", "bedframe")),
+        ("mattress", ("mattressfactory", "mattress")),
+        ("pillow", ("pillowfactory", "pillow", "cushion")),
         ("side_table", ("side_table", "sidetable", "nightstand", "床头柜")),
         ("lamp", ("desk_lamp", "floor_lamp", "desklamp", "floorlamp", "lamp", "台灯", "灯")),
         ("desk", ("simpledesk", "desk", "书桌")),
         ("bookcase", ("bookcase", "bookshelf", "书架")),
         ("cabinet", ("cabinet", "柜")),
+        ("bar_chair", ("barchairfactory", "bar_chair", "bar chair", "bar stool", "stool")),
+        ("office_chair", ("officechairfactory", "office_chair", "office chair")),
+        ("armchair", ("armchairfactory", "armchair", "arm chair", "lounge chair")),
         ("chair", ("officechair", "chair", "椅")),
         ("sofa", ("sofa", "沙发")),
+        ("beverage_fridge", ("beveragefridgefactory", "beverage_fridge", "beverage fridge", "drink fridge", "mini fridge", "fridge")),
+        ("dishwasher", ("dishwasherfactory", "dishwasher")),
+        ("microwave", ("microwavefactory", "microwave", "microwave oven")),
+        ("oven", ("ovenfactory", "oven")),
+        ("monitor", ("monitorfactory", "monitor", "computer monitor", "display")),
+        ("tv", ("tvfactory", "tv", "television")),
         ("bed", ("bed", "床")),
         ("rug", ("rug", "地毯")),
         ("plant", ("plant", "植物")),
@@ -1077,6 +1238,9 @@ def _direction_vector(direction: str) -> Vector:
 
 
 def _make_material(color: str | None, material_name: str | None) -> bpy.types.Material:
+    prompt_mat = _generate_prompt_material(color, material_name)
+    if prompt_mat is not None:
+        return prompt_mat
     if isinstance(color, (list, tuple)):
         rgba = tuple(float(v) for v in color[:4])
         if len(rgba) == 3:
@@ -1096,6 +1260,64 @@ def _make_material(color: str | None, material_name: str | None) -> bpy.types.Ma
     return mat
 
 
+def _resolve_material_path(material: str | None) -> str | None:
+    if not material:
+        return None
+    material_text = str(material).lower().strip()
+    return MATERIAL_ALIASES.get(material_text)
+
+
+def _import_infinigen_item(path: str) -> Any:
+    _configure_infinigen_once()
+    try:
+        from infinigen.core.util.test_utils import import_item
+
+        return import_item(path)
+    except Exception:
+        module_name, item_name = path.rsplit(".", 1)
+        module = importlib.import_module(module_name)
+        return getattr(module, item_name)
+
+
+def _generate_prompt_material(material: str | None, material_name: str | None = None) -> bpy.types.Material | None:
+    material_path = _resolve_material_path(material)
+    if not material_path or material_path.endswith(".apply"):
+        return None
+    material_item = _import_infinigen_item(material_path)
+    material_obj = material_item() if isinstance(material_item, type) else material_item
+    generated = None
+    if hasattr(material_obj, "generate"):
+        generated = material_obj.generate()
+    elif callable(material_obj):
+        generated = material_obj()
+    if isinstance(generated, bpy.types.Material):
+        generated.name = material_name or f"GOSIM_{str(material or 'material')}"
+        return generated
+    return None
+
+
+def _apply_prompt_material(obj: bpy.types.Object, material: str | None, material_name: str | None = None) -> bool:
+    material_path = _resolve_material_path(material)
+    if not material_path:
+        return False
+    material_item = _import_infinigen_item(material_path)
+    if material_path.endswith(".apply"):
+        material_item(obj)
+        return True
+
+    material_obj = material_item() if isinstance(material_item, type) else material_item
+    if hasattr(material_obj, "apply"):
+        material_obj.apply(obj)
+        return True
+
+    generated = _generate_prompt_material(material, material_name)
+    if generated is None:
+        return False
+    obj.data.materials.clear()
+    obj.data.materials.append(generated)
+    return True
+
+
 def _color_from_prompt(prompt: str, explicit: str | None = None) -> str | None:
     if explicit:
         return explicit
@@ -1103,7 +1325,7 @@ def _color_from_prompt(prompt: str, explicit: str | None = None) -> str | None:
     hex_match = re.search(r"#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?", prompt)
     if hex_match:
         return hex_match.group(0)
-    for key, color in COLOR_ALIASES.items():
+    for key, color in sorted(COLOR_ALIASES.items(), key=lambda item: len(item[0]), reverse=True):
         if key.lower() in lowered:
             return color
     return None
@@ -1322,11 +1544,12 @@ def _spawn_infinigen_asset(
     )
 
     if material_color:
-        mat = _make_material(material_color, None)
         for obj in _objects_for_asset(final_asset):
             if obj.type == "MESH" and obj.data:
-                obj.data.materials.clear()
-                obj.data.materials.append(mat)
+                if not _apply_prompt_material(obj, material_color):
+                    mat = _make_material(material_color, None)
+                    obj.data.materials.clear()
+                    obj.data.materials.append(mat)
         bpy.context.view_layer.update()
         final_asset = _resolve_asset(asset_id)
 
@@ -1604,15 +1827,23 @@ def cmd_delete_object(payload: dict[str, Any]) -> dict[str, Any]:
 
 def cmd_set_material(payload: dict[str, Any]) -> dict[str, Any]:
     asset = _resolve_asset(payload.get("target"))
-    mat = _make_material(payload.get("color"), payload.get("material_name"))
+    material = payload.get("color")
+    material_name = payload.get("material_name")
+    mat = None
     changed = 0
     for obj in _objects_for_asset(asset):
         if obj.type != "MESH" or not obj.data:
             continue
+        if _apply_prompt_material(obj, material, material_name):
+            changed += 1
+            continue
+        if mat is None:
+            mat = _make_material(material, material_name)
         obj.data.materials.clear()
         obj.data.materials.append(mat)
         changed += 1
-    return {"message": f"Assigned material {mat.name} to {asset['name']}", "object_id": asset["object_id"], "mesh_count": changed}
+    assigned = material_name or material or (mat.name if mat else "material")
+    return {"message": f"Assigned material {assigned} to {asset['name']}", "object_id": asset["object_id"], "mesh_count": changed}
 
 
 def cmd_place_on(payload: dict[str, Any]) -> dict[str, Any]:

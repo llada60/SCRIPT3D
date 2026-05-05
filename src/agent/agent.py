@@ -144,7 +144,7 @@ class BlenderAgent:
                 "parameters": {
                     "category_or_factory": {
                         "type": "string",
-                        "description": "Asset category or Infinigen factory, for example: bed, desk, side_table, desk_lamp, chair, sofa, cabinet, bookcase, rug, plant, apple, blackberry, green_coconut, hairy_coconut, durian, pineapple, starfruit, strawberry, compositional_fruit.",
+                        "description": "Asset category or Infinigen factory, for example: bed, bed_frame, mattress, pillow, desk, side_table, chair, bar_chair, office_chair, sofa, armchair, beverage_fridge, dishwasher, microwave, oven, tv, monitor, apple, strawberry.",
                     },
                     "seed": {"type": "integer", "description": "Optional random seed."},
                     "location": {"type": "array", "description": "Optional placement location [x, y, z]."},
@@ -160,7 +160,7 @@ class BlenderAgent:
                     "prompt": {"type": "string", "description": "Complete edit instruction, for example: make the desk in the scene green."},
                     "color": {
                         "type": "string",
-                        "description": "Optional color: red, blue, green, white, black, wood, or #RRGGBB.",
+                        "description": "Optional color/material: red, blue, green, white, black, wood, ceramic, glass, marble, tile, advanced_tiles, metal, aluminum, brushed_metal, plastic, black_plastic, rubber, or #RRGGBB.",
                     },
                     "preserve_size": {"type": "boolean", "description": "Whether to preserve the original asset size. Defaults to true."},
                 },
@@ -250,7 +250,7 @@ class BlenderAgent:
                     "material_name": {"type": "string", "description": "Optional material name."},
                     "color": {
                         "type": "string",
-                        "description": "Color: red, blue, green, white, black, wood, or #RRGGBB.",
+                        "description": "Color/material: red, blue, green, white, black, wood, ceramic, glass, marble, tile, advanced_tiles, metal, aluminum, brushed_metal, plastic, black_plastic, rubber, or #RRGGBB.",
                     },
                 },
                 "required": [],
