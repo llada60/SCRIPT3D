@@ -47,6 +47,14 @@ SERVER: socketserver.ThreadingTCPServer | None = None
 SERVER_THREAD: threading.Thread | None = None
 TIMER_REGISTERED = False
 INFINIGEN_CONFIGURED = False
+AGENT_STATUS: dict[str, Any] = {
+    "state": "idle",
+    "message": "Agent 空闲",
+    "operation": "",
+    "run_id": "",
+    "cancel_requested": False,
+    "updated_at": 0.0,
+}
 
 
 ASSET_FACTORY_ALIASES = {
@@ -207,6 +215,40 @@ def _err(message: str) -> dict[str, Any]:
     return {"ok": False, "status": "error", "error": message, "message": message}
 
 
+def _set_agent_status(
+    state: str,
+    message: str = "",
+    *,
+    run_id: str | None = None,
+    operation: str | None = None,
+) -> dict[str, Any]:
+    if state in {"running", "idle"}:
+        AGENT_STATUS["cancel_requested"] = False
+    AGENT_STATUS["state"] = state
+    AGENT_STATUS["message"] = message or AGENT_STATUS.get("message") or ""
+    AGENT_STATUS["operation"] = operation if operation is not None else AGENT_STATUS.get("operation", "")
+    if run_id is not None:
+        AGENT_STATUS["run_id"] = run_id
+    if state in {"idle", "cancelled", "error"}:
+        AGENT_STATUS["operation"] = ""
+    AGENT_STATUS["updated_at"] = time.time()
+    _sync_scene_agent_status()
+    return dict(AGENT_STATUS)
+
+
+def _sync_scene_agent_status() -> None:
+    scene = getattr(bpy.context, "scene", None)
+    if scene is None:
+        return
+    try:
+        scene.gosim_agent_state = str(AGENT_STATUS.get("state", "idle"))
+        scene.gosim_agent_message = str(AGENT_STATUS.get("message", ""))
+        scene.gosim_agent_operation = str(AGENT_STATUS.get("operation", ""))
+        scene.gosim_agent_cancel_requested = bool(AGENT_STATUS.get("cancel_requested", False))
+    except Exception:
+        pass
+
+
 class _ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
     daemon_threads = True
@@ -248,9 +290,37 @@ def _process_queue() -> float | None:
             handler = COMMANDS.get(command)
             if handler is None:
                 slot["response"] = _err(f"Unknown command: {command}")
+            elif AGENT_STATUS.get("cancel_requested") and command not in {
+                "get_agent_status",
+                "set_agent_status",
+                "cancel_agent_run",
+                "ping",
+            }:
+                slot["response"] = _err("Agent run cancelled")
             else:
-                slot["response"] = _ok(handler(payload))
+                previous_status = dict(AGENT_STATUS)
+                if command not in {"get_agent_status", "set_agent_status", "cancel_agent_run", "ping"}:
+                    _set_agent_status(
+                        "running",
+                        f"Blender 正在执行：{command}",
+                        run_id=previous_status.get("run_id") or None,
+                        operation=command,
+                    )
+                try:
+                    slot["response"] = _ok(handler(payload))
+                finally:
+                    if command not in {"get_agent_status", "set_agent_status", "cancel_agent_run", "ping"}:
+                        if AGENT_STATUS.get("cancel_requested"):
+                            _set_agent_status("cancelled", "Agent 运行已停止")
+                        else:
+                            _set_agent_status(
+                                previous_status.get("state", "idle"),
+                                previous_status.get("message", ""),
+                                run_id=previous_status.get("run_id") or None,
+                                operation=previous_status.get("operation") or None,
+                            )
         except Exception:
+            _set_agent_status("error", "Blender 命令执行失败")
             slot["response"] = _err(traceback.format_exc())
         finally:
             event.set()
@@ -1020,6 +1090,29 @@ def cmd_ping(_payload: dict[str, Any]) -> dict[str, Any]:
     return {"message": "pong", "host": HOST, "port": PORT, "blend_path": bpy.data.filepath}
 
 
+def cmd_set_agent_status(payload: dict[str, Any]) -> dict[str, Any]:
+    return _set_agent_status(
+        str(payload.get("state", "idle")),
+        str(payload.get("message", "")),
+        run_id=payload.get("run_id") or None,
+        operation=payload.get("operation") or None,
+    )
+
+
+def cmd_get_agent_status(_payload: dict[str, Any]) -> dict[str, Any]:
+    _sync_scene_agent_status()
+    return dict(AGENT_STATUS)
+
+
+def cmd_cancel_agent_run(_payload: dict[str, Any]) -> dict[str, Any]:
+    AGENT_STATUS["cancel_requested"] = True
+    AGENT_STATUS["state"] = "cancelling"
+    AGENT_STATUS["message"] = "已请求停止 Agent 运行"
+    AGENT_STATUS["updated_at"] = time.time()
+    _sync_scene_agent_status()
+    return dict(AGENT_STATUS)
+
+
 def cmd_get_scene_info(_payload: dict[str, Any]) -> dict[str, Any]:
     objects = []
     for obj in bpy.context.scene.objects:
@@ -1357,6 +1450,9 @@ def cmd_render_scene(payload: dict[str, Any]) -> dict[str, Any]:
 
 COMMANDS = {
     "ping": cmd_ping,
+    "set_agent_status": cmd_set_agent_status,
+    "get_agent_status": cmd_get_agent_status,
+    "cancel_agent_run": cmd_cancel_agent_run,
     "get_scene_info": cmd_get_scene_info,
     "rebuild_scene_index": cmd_rebuild_scene_index,
     "query_objects": cmd_query_objects,
@@ -1405,6 +1501,17 @@ class GOSIM_OT_rebuild_index(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class GOSIM_OT_cancel_agent_run(bpy.types.Operator):
+    bl_idname = "gosim.cancel_agent_run"
+    bl_label = "Stop Agent Run"
+    bl_description = "Request the UI/agent loop to stop at the next cancellation check"
+
+    def execute(self, _context: bpy.types.Context) -> set[str]:
+        cmd_cancel_agent_run({})
+        self.report({"WARNING"}, "Requested Agent stop")
+        return {"FINISHED"}
+
+
 class GOSIM_PT_panel(bpy.types.Panel):
     bl_label = "GOSIM Agent"
     bl_idname = "GOSIM_PT_panel"
@@ -1415,9 +1522,30 @@ class GOSIM_PT_panel(bpy.types.Panel):
     def draw(self, context: bpy.types.Context) -> None:
         layout = self.layout
         layout.label(text=f"Socket: {HOST}:{PORT}")
-        layout.label(text=f"Status: {'running' if SERVER else 'stopped'}")
+        layout.label(text=f"Server: {'running' if SERVER else 'stopped'}")
         layout.operator("gosim.start_server")
         layout.operator("gosim.stop_server")
+
+        layout.separator()
+        _sync_scene_agent_status()
+        state = getattr(context.scene, "gosim_agent_state", AGENT_STATUS.get("state", "idle"))
+        message = getattr(context.scene, "gosim_agent_message", AGENT_STATUS.get("message", ""))
+        operation = getattr(context.scene, "gosim_agent_operation", AGENT_STATUS.get("operation", ""))
+        cancel_requested = getattr(
+            context.scene,
+            "gosim_agent_cancel_requested",
+            AGENT_STATUS.get("cancel_requested", False),
+        )
+        layout.label(text=f"Agent: {state}")
+        if operation:
+            layout.label(text=f"Operation: {operation}")
+        if message:
+            layout.label(text=message)
+        cancel_row = layout.row()
+        cancel_row.enabled = state in {"running", "cancelling"} and not cancel_requested
+        cancel_row.operator("gosim.cancel_agent_run", icon="CANCEL")
+
+        layout.separator()
         layout.operator("gosim.rebuild_index")
 
 
@@ -1425,6 +1553,7 @@ CLASSES = (
     GOSIM_OT_start_server,
     GOSIM_OT_stop_server,
     GOSIM_OT_rebuild_index,
+    GOSIM_OT_cancel_agent_run,
     GOSIM_PT_panel,
 )
 
@@ -1432,12 +1561,25 @@ CLASSES = (
 def register() -> None:
     for cls in CLASSES:
         bpy.utils.register_class(cls)
+    bpy.types.Scene.gosim_agent_state = bpy.props.StringProperty(default="idle")
+    bpy.types.Scene.gosim_agent_message = bpy.props.StringProperty(default="Agent 空闲")
+    bpy.types.Scene.gosim_agent_operation = bpy.props.StringProperty(default="")
+    bpy.types.Scene.gosim_agent_cancel_requested = bpy.props.BoolProperty(default=False)
+    _sync_scene_agent_status()
     if os.getenv("GOSIM_NO_AUTOSTART") != "1":
         start_server()
 
 
 def unregister() -> None:
     stop_server()
+    for attr in (
+        "gosim_agent_state",
+        "gosim_agent_message",
+        "gosim_agent_operation",
+        "gosim_agent_cancel_requested",
+    ):
+        if hasattr(bpy.types.Scene, attr):
+            delattr(bpy.types.Scene, attr)
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)
 
