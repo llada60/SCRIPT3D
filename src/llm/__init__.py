@@ -6,20 +6,24 @@ import os
 from typing import Dict, Any, Optional
 
 from .base import BaseLLM
+from .claude import ClaudeLLM
+from .zhipu import ZhipuLLM
+from .deepseek import DeepSeekLLM
+from .doubao import DoubaoLLM
+from .moonshot import MoonshotLLM
+from .aimlapi import AIMLAPI_LLM
+from .r9s import R9SLLM
 
-
-LLM_IMPORTS = {
-    "claude": (".claude", "ClaudeLLM"),
-    "zhipu": (".zhipu", "ZhipuLLM"),
-    "deepseek": (".deepseek", "DeepSeekLLM"),
-    "doubao": (".doubao", "DoubaoLLM"),
-    "moonshot": (".moonshot", "MoonshotLLM"),
-    "aimlapi": (".aimlapi", "AIMLAPI_LLM"),
-    "openai": (".deepseek", "DeepSeekLLM"),
+# 支持的LLM模型
+LLM_MODELS = {
+    "claude": ClaudeLLM,
+    "zhipu": ZhipuLLM,
+    "deepseek": DeepSeekLLM,
+    "doubao": DoubaoLLM,
+    "moonshot": MoonshotLLM,
+    "aimlapi": AIMLAPI_LLM,
+    "r9s": R9SLLM,
 }
-
-# Kept for compatibility with code that lists available model families.
-LLM_MODELS = {name: None for name in LLM_IMPORTS}
 
 class LLMFactory:
     """LLM工厂类，用于创建LLM实例"""
@@ -36,14 +40,10 @@ class LLMFactory:
         Returns:
             LLM实例
         """
-        if model_type not in LLM_IMPORTS:
-            raise ValueError(f"不支持的LLM类型: {model_type}，支持的类型有: {', '.join(LLM_IMPORTS.keys())}")
-
-        module_name, class_name = LLM_IMPORTS[model_type]
-        from importlib import import_module
-
-        module = import_module(module_name, package=__name__)
-        llm_class = getattr(module, class_name)
+        if model_type not in LLM_MODELS:
+            raise ValueError(f"不支持的LLM类型: {model_type}，支持的类型有: {', '.join(LLM_MODELS.keys())}")
+            
+        llm_class = LLM_MODELS[model_type]
         api_key = config.get("api_key", "")
         model = config.get("model", "")
         
