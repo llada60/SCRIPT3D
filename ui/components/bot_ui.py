@@ -15,10 +15,10 @@ from modelscope_studio.components.pro.chatbot import (
 """
 消息类型：
 # 文本消息
-ChatbotDataMessage(role="user", content="你好，我是Blender AI助手"),
+ChatbotDataMessage(role="user", content="Hi, I am the Blender AI assistant"),
 {
     "role": "assistant",
-    "content": "你好！我可以帮你操作Blender，请告诉我你想要做什么。",
+    "content": "Hi. I can help control Blender. Tell me what you want to do.",
 },
 # 图片消息
 ChatbotDataMessage(
@@ -88,23 +88,23 @@ def create_chat_interface():
             ),
             value=[
                 # 文本消息
-                # ChatbotDataMessage(role="user", content="你好，我是Blender AI助手"),
+                # ChatbotDataMessage(role="user", content="Hi, I am the Blender AI assistant"),
                 {
                     "role": "assistant",
-                    "content": "你好！我可以帮你编辑 Infinigen/Blender 场景，请告诉我想添加或调整什么。",
+                    "content": "Hi. I can help edit your Blender scene. Tell me what you want to add or adjust.",
                 },
             ],
         )
 
         with pro.MultimodalInput(
-            upload_config=dict(upload_button_tooltip="添加图片"),
-            placeholder="请输入想让 Blender/Infinigen 执行的操作指令",
+            upload_config=dict(upload_button_tooltip="Attach image"),
+            placeholder="Enter an instruction for Blender/Infinigen",
             elem_style=dict(
                 marginTop="12px",
             )
         ) as input:
             with ms.Slot("prefix"):
-                with antd.Tooltip("清空历史记录"):
+                with antd.Tooltip("Clear chat history"):
                     with antd.Button(
                         value=None, variant="text", color="default"
                     ) as clear_btn:

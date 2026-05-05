@@ -60,7 +60,7 @@ class MoonshotLLM(BaseLLM):
         
         except Exception as e:
             return {
-                "content": f"与Moonshot API通信出错: {str(e)}",
+                "content": f"Moonshot API communication error: {str(e)}",
                 "function_call": None,
                 "error": str(e)
             }
@@ -128,6 +128,6 @@ class MoonshotLLM(BaseLLM):
             return result
             
         except Exception as e:
-            result["content"] = f"解析Moonshot API响应出错: {str(e)}"
+            result["content"] = f"Error parsing Moonshot API response: {str(e)}"
             result["error"] = str(e)
             return result 

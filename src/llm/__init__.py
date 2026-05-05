@@ -46,8 +46,8 @@ class LLMFactory:
             return prefix
 
         raise ValueError(
-            f"不支持的LLM类型: {model_type}，支持的类型有: {', '.join(LLM_MODELS.keys())}；"
-            "自定义配置请添加 provider 字段，例如 \"provider\": \"r9s\""
+            f"Unsupported LLM type: {model_type}. Supported types: {', '.join(LLM_MODELS.keys())}. "
+            "For custom config entries, add a provider field, for example \"provider\": \"r9s\"."
         )
 
     @staticmethod
@@ -86,7 +86,7 @@ class LLMFactory:
         """
         # 读取配置文件
         if not os.path.exists(config_file):
-            raise FileNotFoundError(f"配置文件不存在: {config_file}")
+            raise FileNotFoundError(f"Config file does not exist: {config_file}")
 
         with open(config_file, "r", encoding="utf-8") as f:
             config = json.load(f)
@@ -99,7 +99,7 @@ class LLMFactory:
             model_type = llm_config.get("default_model", "claude")
 
         if model_type not in llm_config:
-            raise ValueError(f"配置文件中未找到模型类型: {model_type}")
+            raise ValueError(f"Model type not found in config file: {model_type}")
 
         # 创建LLM实例
         model_config = llm_config.get(model_type, {})

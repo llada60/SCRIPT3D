@@ -60,7 +60,7 @@ class ZhipuLLM(BaseLLM):
         
         except Exception as e:
             return {
-                "content": f"与智谱AI API通信出错: {str(e)}",
+                "content": f"ZhipuAI API communication error: {str(e)}",
                 "function_call": None,
                 "error": str(e)
             }

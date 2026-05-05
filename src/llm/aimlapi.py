@@ -76,7 +76,7 @@ class AIMLAPI_LLM(BaseLLM):
                 "temperature": temperature,
                 "max_tokens": max_tokens or 512,
                 "stream": False,
-                "system": "你是一位专业的3D建模助手，可以通过自然语言指令控制Blender软件进行3D建模。"
+                "system": "You are a professional 3D scene-editing assistant. Control Blender through natural-language instructions and tool calls. Reply in English."
             }
             
             # 添加工具（函数）
@@ -95,12 +95,12 @@ class AIMLAPI_LLM(BaseLLM):
             # 打印请求体以便调试
             if 'payload' in locals():
                 try:
-                    print("请求体:", json.dumps(payload, indent=2, ensure_ascii=False))
+                    print("Request payload:", json.dumps(payload, indent=2, ensure_ascii=False))
                 except:
-                    print("无法打印请求体")
+                    print("Unable to print request payload")
             
             return {
-                "content": f"与AIMLAPI通信出错: {str(e)}",
+                "content": f"AIMLAPI communication error: {str(e)}",
                 "function_call": None,
                 "error": str(e)
             }
@@ -137,8 +137,7 @@ class AIMLAPI_LLM(BaseLLM):
                 "temperature": temperature,
                 "max_tokens": max_tokens or 512,
                 "stream": True,
-                "system": "你是一位专业的3D建模助手，可以通过自然语言指令控制Blender软件进行3D建模。" \
-                    "当用户的指令完成时，请返回'全部完成';当需要用户指令时，请返回'等待用户指令'"
+                "system": "You are a professional 3D scene-editing assistant. Control Blender through natural-language instructions and tool calls. Reply in English. When the user's instruction is complete, reply exactly 'All done.'; when user input is needed, reply 'Waiting for user instruction.'"
             }
             
             if formatted_functions:
@@ -219,7 +218,7 @@ class AIMLAPI_LLM(BaseLLM):
                                     if function_call["name"] and isinstance(function_call.get("arguments"), dict):
                                         yield {"content": None, "function_call": function_call}
                         except json.JSONDecodeError:
-                            print(f"无法解析JSON: {json_str}")
+                            print(f"Unable to parse JSON: {json_str}")
             
             # 流结束后，尝试最后一次解析函数参数
             if function_call and function_call["name"] and not function_call.get("arguments"):
@@ -236,7 +235,7 @@ class AIMLAPI_LLM(BaseLLM):
                         function_call["arguments"] = {}
                         yield {"content": None, "function_call": function_call}
                 except Exception as e:
-                    print(f"最终解析函数参数失败: {str(e)}")
+                    print(f"Final function-argument parse failed: {str(e)}")
                     # 确保至少有一个空对象
                     function_call["arguments"] = {}
                     yield {"content": None, "function_call": function_call}
@@ -245,12 +244,12 @@ class AIMLAPI_LLM(BaseLLM):
             # 打印请求体以便调试
             if 'payload' in locals():
                 try:
-                    print("请求体:", json.dumps(payload, indent=2, ensure_ascii=False))
+                    print("Request payload:", json.dumps(payload, indent=2, ensure_ascii=False))
                 except:
-                    print("无法打印请求体")
+                    print("Unable to print request payload")
             
             yield {
-                "content": f"与AIMLAPI通信出错: {str(e)}",
+                "content": f"AIMLAPI communication error: {str(e)}",
                 "function_call": None,
                 "error": str(e)
             }
@@ -336,7 +335,7 @@ class AIMLAPI_LLM(BaseLLM):
                                         }
                                     })
                                 except Exception as e:
-                                    print(f"处理本地图片失败: {str(e)}")
+                                    print(f"Failed to process local image: {str(e)}")
                             # 如果不是本地文件，则可能是URL (不处理远程URL，除非有特殊需求)
                 
                 # 添加消息，只有在有内容时才添加
@@ -349,7 +348,7 @@ class AIMLAPI_LLM(BaseLLM):
                     # 如果所有图片格式都无效，至少添加一个纯文本消息
                     formatted_messages.append({
                         "role": role,
-                        "content": "查看图片"
+                        "content": "View image"
                     })
         
         return formatted_messages
@@ -433,7 +432,7 @@ class AIMLAPI_LLM(BaseLLM):
                         "arguments": arguments
                     }
         except Exception as e:
-            result["content"] = f"解析AIMLAPI响应出错: {str(e)}"
+            result["content"] = f"Error parsing AIMLAPI response: {str(e)}"
             result["error"] = str(e)
         
         return result
@@ -495,50 +494,50 @@ if __name__ == "__main__":
         model = aimlapi_config.get("model", "claude-3-7-sonnet-20250219")
         
         if not api_key:
-            print("错误: 配置文件中未找到有效的AIMLAPI API密钥")
+            print("Error: no valid AIMLAPI API key was found in the config file")
             exit(1)
             
         # 创建AIMLAPI实例
         llm = AIMLAPI_LLM(api_key=api_key, model=model)
         
-        # ============= 测试文本对话 =============
-        print("\n===== 测试文本对话 =====")
+        # ============= Test text chat =============
+        print("\n===== Test Text Chat =====")
         text_messages = [
-            {"role": "user", "content": "你好，请简单介绍一下你自己。"}
+            {"role": "user", "content": "Hello, please briefly introduce yourself."}
         ]
         
-        # 定义一个简单的测试函数
+        # Define a simple test function
         test_function = [{
             "name": "create_cube",
-            "description": "在Blender中创建一个立方体",
+            "description": "Create a cube in Blender",
             "parameters": {
                 "size": {
                     "type": "number",
-                    "description": "立方体的大小"
+                    "description": "Cube size"
                 },
                 "location": {
                     "type": "array",
-                    "description": "立方体的位置坐标 [x, y, z]"
+                    "description": "Cube location coordinates [x, y, z]"
                 }
             },
             "required": ["size"]
         }]
         
         # 进行对话
-        print("正在测试AIMLAPI文本对话...")
+        print("Testing AIMLAPI text chat...")
         text_response = llm.chat(messages=text_messages, functions=test_function)
-        print("\n文本响应:", text_response.get("content"))
-        
-        # ============= 测试本地图片输入 =============
-        print("\n\n===== 测试本地图片输入 =====")
+        print("\nText response:", text_response.get("content"))
+
+        # ============= Test local image input =============
+        print("\n\n===== Test Local Image Input =====")
         # 设置测试图片路径为asserts/test_image.jpg
         test_image_path = os.path.join(project_root, "asserts", "test_image.jpg")
                 
         if os.path.exists(test_image_path):
-            print(f"找到测试图片: {test_image_path}")
+            print(f"Found test image: {test_image_path}")
             
             # 原始方式测试
-            print("原始方式测试本地图片输入...")
+            print("Testing local image input through the original path...")
             # 读取并编码图片
             image_base64 = llm.encode_image(test_image_path)
             media_type = llm.get_media_type(test_image_path)
@@ -548,20 +547,20 @@ if __name__ == "__main__":
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "这张图片是什么，请详细描述一下。"},
+                        {"type": "text", "text": "What is in this image? Please describe it in detail."},
                         {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_base64}}
                     ]
                 }
             ]
             
             image_base64_response = llm.chat(messages=image_base64_messages)
-            print("\n原始方式本地图片响应:", image_base64_response.get("content"))
+            print("\nOriginal local-image response:", image_base64_response.get("content"))
             
         else:
-            print(f"本地图片测试跳过: 找不到测试图片，路径: {test_image_path}")
-            print("请确认asserts目录中有test_image.jpg文件")
-        
-        print("\n测试完成")
-        
+            print(f"Local image test skipped: test image not found at {test_image_path}")
+            print("Please make sure asserts/test_image.jpg exists")
+
+        print("\nTest complete")
+
     except Exception as e:
-        print(f"测试过程中出现错误: {str(e)}") 
+        print(f"Error during test: {str(e)}") 

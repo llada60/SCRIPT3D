@@ -25,24 +25,24 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
-PHYSICAL_RULES_PROMPT = """你是 Blender/Infinigen 场景编辑 planner。
-遵守这些写死的物理规则：
-- 把cube删掉
-- 严格按照用户当前指令执行，只做用户明确要求的动作。
-- 不要乱加东西；不要为了“更自然”“更丰富”“更好看”添加、移动、删除或修改用户没有要求的物体。
-- 如果用户只要求添加草莓并放到椅子上，就只添加/移动指令中明确提到的草莓和椅子相关对象，并执行必要的物理/索引更新；不要添加桌子或其他未提到的家具。
-- 符合物理常识，例如：家具通常放在地面上
-- 水果比家具小，地毯比家具大但很薄，灯具需要支撑面。
-- 苹果、草莓、黑莓等水果必须保持真实桌面物件大小；除非用户明确要求巨大水果，否则不要给水果使用 1.0 这类家具级 scale。
-- 不要让对象悬空；空间编辑后对被编辑对象调用 apply_physics_rules，再调用 rebuild_scene_index。
-- 表达“放到上面”时优先用 place_on，不要用裸 move_object。
-- 对椅子/沙发表达“放在上面”时，目标是坐垫/承托面，不是椅背或靠背顶部。
-- 表达“旁边/靠墙”时优先用 place_near/place_against_wall。
-- 大型家具默认落地；地毯必须落地。
-- 缩放保持在合理范围，执行层会把极端 scale clamp 到安全范围。
-- 用户要求调整视角、构图、相机位置、让渲染主体居中或变大/变小时，优先调用 adjust_camera_from_render。
-不要生成 Python 代码，只使用提供的 function call。
-任务完成后回复“全部完成”，不要主动提出或执行额外优化。
+PHYSICAL_RULES_PROMPT = """You are a Blender/Infinigen scene-editing planner.
+Follow these fixed physical and behavioral rules:
+- Remove the default cube when it is not relevant.
+- Follow only the user's current instruction. Perform only explicitly requested actions.
+- Do not add, delete, move, or modify objects that the user did not request, even if it would make the scene more natural, richer, or prettier.
+- If the user only asks to add a strawberry and place it on a chair, only add/move the explicitly requested strawberry and chair-related objects; do not add a table or any other unrequested furniture.
+- Follow basic physical plausibility: furniture usually rests on the floor.
+- Fruit should be smaller than furniture; rugs should be larger than furniture but thin; lights need plausible support or placement.
+- Apples, strawberries, blackberries, and other fruit must stay at realistic tabletop-object sizes unless the user explicitly requests giant fruit. Do not use furniture-scale values such as 1.0 for fruit.
+- Do not leave objects floating. After spatial edits, call apply_physics_rules for edited objects, then call rebuild_scene_index.
+- For "put on top of" requests, prefer place_on instead of raw move_object.
+- For chairs/sofas, "put on top of" means the seat/support surface, not the chair back.
+- For "beside" or "against the wall" requests, prefer place_near/place_against_wall.
+- Large furniture should rest on the floor by default. Rugs must rest on the floor.
+- Keep scale values reasonable; the execution layer will clamp extreme scales.
+- If the user asks to adjust the view, composition, camera position, centering, or subject size in the render, prefer adjust_camera_from_render.
+Do not generate Python code. Use only the provided function calls.
+When the task is complete, reply exactly: All done.
 """
 
 
@@ -98,210 +98,210 @@ class BlenderAgent:
         self.functions = [
             {
                 "name": "get_scene_info",
-                "description": "获取当前 Blender/Infinigen 场景信息和对象列表。",
+                "description": "Get current Blender/Infinigen scene information and object list.",
                 "parameters": {},
                 "required": [],
             },
             {
                 "name": "rebuild_scene_index",
-                "description": "重建当前场景的语义索引，返回每个资产的类别、尺寸、位置、材质和空间关系。",
+                "description": "Rebuild the semantic index for the current scene, including asset categories, dimensions, locations, materials, and spatial relations.",
                 "parameters": {
-                    "save_path": {"type": "string", "description": "索引 JSON 保存路径，可选。"}
+                    "save_path": {"type": "string", "description": "Optional path for saving the index JSON."}
                 },
                 "required": [],
             },
             {
                 "name": "query_objects",
-                "description": "根据自然语言、类别、对象名或 object_id 查询当前场景资产。",
+                "description": "Query scene assets by natural language, category, object name, or object_id.",
                 "parameters": {
-                    "text": {"type": "string", "description": "查询文本，例如：床旁边的桌子、台灯、desk"},
+                    "text": {"type": "string", "description": "Query text, for example: table beside the bed, desk lamp, desk."},
                     "category": {
                         "type": "string",
-                        "description": "可选类别：bed, desk, table, side_table, lamp, chair, sofa, cabinet, bookcase, rug, plant, apple, blackberry, green_coconut, hairy_coconut, durian, pineapple, starfruit, strawberry, compositional_fruit, wall, floor, room",
+                        "description": "Optional category: bed, desk, table, side_table, lamp, chair, sofa, cabinet, bookcase, rug, plant, apple, blackberry, green_coconut, hairy_coconut, durian, pineapple, starfruit, strawberry, compositional_fruit, wall, floor, room.",
                     },
                 },
                 "required": [],
             },
             {
                 "name": "open_blend",
-                "description": "打开一个 .blend 场景文件。",
+                "description": "Open a .blend scene file.",
                 "parameters": {
-                    "path": {"type": "string", "description": "要打开的 .blend 文件绝对路径。"}
+                    "path": {"type": "string", "description": "Absolute path to the .blend file to open."}
                 },
                 "required": ["path"],
             },
             {
                 "name": "save_blend",
-                "description": "保存当前 .blend 文件。",
+                "description": "Save the current .blend file.",
                 "parameters": {
-                    "path": {"type": "string", "description": "保存路径，可选；不填则保存当前文件。"}
+                    "path": {"type": "string", "description": "Optional save path. If omitted, save the current file."}
                 },
                 "required": [],
             },
             {
                 "name": "add_infinigen_asset",
-                "description": "通过 Infinigen factory 在当前场景中添加家具或物体，替代 Rodin/Hunyuan3D 生成。",
+                "description": "Add furniture or an object to the current scene through an Infinigen factory.",
                 "parameters": {
                     "category_or_factory": {
                         "type": "string",
-                        "description": "资产类别或 Infinigen factory，例如 bed, desk, side_table, desk_lamp, chair, sofa, cabinet, bookcase, rug, plant, apple, blackberry, green_coconut, hairy_coconut, durian, pineapple, starfruit, strawberry, compositional_fruit。",
+                        "description": "Asset category or Infinigen factory, for example: bed, desk, side_table, desk_lamp, chair, sofa, cabinet, bookcase, rug, plant, apple, blackberry, green_coconut, hairy_coconut, durian, pineapple, starfruit, strawberry, compositional_fruit.",
                     },
-                    "seed": {"type": "integer", "description": "随机种子，可选。"},
-                    "location": {"type": "array", "description": "放置位置 [x, y, z]，可选。"},
-                    "scale": {"type": "number", "description": "整体缩放，可选；水果已有小尺寸默认值，例如苹果约 0.12、草莓约 0.15，除非用户明确要求不要传 1.0。"},
+                    "seed": {"type": "integer", "description": "Optional random seed."},
+                    "location": {"type": "array", "description": "Optional placement location [x, y, z]."},
+                    "scale": {"type": "number", "description": "Optional uniform scale. Fruit already has small defaults, for example apple around 0.12 and strawberry around 0.15; do not pass 1.0 unless the user explicitly asks for a large fruit."},
                 },
                 "required": ["category_or_factory"],
             },
             {
                 "name": "edit_generated_asset",
-                "description": "编辑已生成资产的生成脚本，重新生成并替换场景中的旧资产，同时保持原位置和大小对齐。用户以 \\editing 开头时优先使用。",
+                "description": "Edit a generated asset's generation script, regenerate it, and replace the old scene asset while preserving position and size alignment. Prefer this when the user starts with \\editing.",
                 "parameters": {
-                    "target": {"type": "string", "description": "目标对象，例如 桌子、desk、asset_xxx。"},
-                    "prompt": {"type": "string", "description": "完整编辑指令，例如：场景中的桌子改成绿色。"},
+                    "target": {"type": "string", "description": "Target object, for example: desk or asset_xxx."},
+                    "prompt": {"type": "string", "description": "Complete edit instruction, for example: make the desk in the scene green."},
                     "color": {
                         "type": "string",
-                        "description": "可选颜色：red, blue, green, white, black, wood 或 #RRGGBB。",
+                        "description": "Optional color: red, blue, green, white, black, wood, or #RRGGBB.",
                     },
-                    "preserve_size": {"type": "boolean", "description": "是否保持原资产大小，默认 true。"},
+                    "preserve_size": {"type": "boolean", "description": "Whether to preserve the original asset size. Defaults to true."},
                 },
                 "required": ["target", "prompt"],
             },
             {
                 "name": "move_object",
-                "description": "按方向移动对象。target 可以是 object_id、对象名、类别或自然语言描述。",
+                "description": "Move an object in a direction. target may be an object_id, object name, category, or natural-language description.",
                 "parameters": {
-                    "target": {"type": "string", "description": "目标对象，例如 bed、桌子、asset_xxx。"},
+                    "target": {"type": "string", "description": "Target object, for example: bed, desk, or asset_xxx."},
                     "direction": {
                         "type": "string",
-                        "description": "方向：left, right, front, back, up, down。",
+                        "description": "Direction: left, right, front, back, up, down.",
                         "enum": ["left", "right", "front", "back", "up", "down"],
                     },
-                    "distance": {"type": "number", "description": "移动距离，单位米。"},
+                    "distance": {"type": "number", "description": "Move distance in meters."},
                 },
                 "required": ["target", "direction", "distance"],
             },
             {
                 "name": "scale_object",
-                "description": "缩放对象。factor 大于 1 为放大，小于 1 为缩小。",
+                "description": "Scale an object. factor greater than 1 enlarges it; factor less than 1 shrinks it.",
                 "parameters": {
-                    "target": {"type": "string", "description": "目标对象。"},
-                    "factor": {"type": "number", "description": "缩放倍数，例如 1.2 或 0.8。"},
+                    "target": {"type": "string", "description": "Target object."},
+                    "factor": {"type": "number", "description": "Scale factor, for example 1.2 or 0.8."},
                 },
                 "required": ["target", "factor"],
             },
             {
                 "name": "rotate_object",
-                "description": "旋转对象。",
+                "description": "Rotate an object.",
                 "parameters": {
-                    "target": {"type": "string", "description": "目标对象。"},
-                    "axis": {"type": "string", "description": "旋转轴：x, y, z。", "enum": ["x", "y", "z"]},
-                    "angle_degrees": {"type": "number", "description": "旋转角度，单位度。"},
+                    "target": {"type": "string", "description": "Target object."},
+                    "axis": {"type": "string", "description": "Rotation axis: x, y, z.", "enum": ["x", "y", "z"]},
+                    "angle_degrees": {"type": "number", "description": "Rotation angle in degrees."},
                 },
                 "required": ["target", "axis", "angle_degrees"],
             },
             {
                 "name": "place_on",
-                "description": "把 source 放到 target 的可承托上表面中心，例如桌面或椅子坐垫。",
+                "description": "Place source on the center of target's supportable top surface, such as a tabletop or chair seat.",
                 "parameters": {
-                    "source": {"type": "string", "description": "要移动的对象。"},
-                    "target": {"type": "string", "description": "承载对象。"},
+                    "source": {"type": "string", "description": "Object to move."},
+                    "target": {"type": "string", "description": "Support object."},
                 },
                 "required": ["source", "target"],
             },
             {
                 "name": "place_near",
-                "description": "把 source 放到 target 旁边。",
+                "description": "Place source beside target.",
                 "parameters": {
-                    "source": {"type": "string", "description": "要移动的对象。"},
-                    "target": {"type": "string", "description": "参考对象。"},
+                    "source": {"type": "string", "description": "Object to move."},
+                    "target": {"type": "string", "description": "Reference object."},
                     "side": {
                         "type": "string",
-                        "description": "相对方向：left, right, front, back。",
+                        "description": "Relative side: left, right, front, back.",
                         "enum": ["left", "right", "front", "back"],
                     },
-                    "gap": {"type": "number", "description": "间距，单位米。"},
+                    "gap": {"type": "number", "description": "Gap in meters."},
                 },
                 "required": ["source", "target"],
             },
             {
                 "name": "place_against_wall",
-                "description": "将目标对象靠近最近墙面或指定墙面。",
+                "description": "Place the target object near the nearest wall or a specified wall.",
                 "parameters": {
-                    "target": {"type": "string", "description": "目标对象。"},
-                    "wall": {"type": "string", "description": "墙对象，可选。"},
-                    "gap": {"type": "number", "description": "离墙间距，单位米。"},
+                    "target": {"type": "string", "description": "Target object."},
+                    "wall": {"type": "string", "description": "Optional wall object."},
+                    "gap": {"type": "number", "description": "Distance from the wall in meters."},
                 },
                 "required": ["target"],
             },
             {
                 "name": "apply_physics_rules",
-                "description": "对场景或指定对象应用写死的物理规则：防悬空、贴地、缩放/放置后的基础碰撞提示。",
+                "description": "Apply fixed physical rules to the scene or a target object: prevent floating, snap to ground, and provide basic collision hints after scaling/placement.",
                 "parameters": {
-                    "target": {"type": "string", "description": "目标对象；不填则检查整个场景。"}
+                    "target": {"type": "string", "description": "Target object. If omitted, check the whole scene."}
                 },
                 "required": [],
             },
             {
                 "name": "set_material",
-                "description": "修改对象材质颜色。",
+                "description": "Change an object's material color.",
                 "parameters": {
-                    "target": {"type": "string", "description": "目标对象。"},
-                    "object_name": {"type": "string", "description": "兼容旧字段，目标对象名。"},
-                    "material_name": {"type": "string", "description": "材质名，可选。"},
+                    "target": {"type": "string", "description": "Target object."},
+                    "object_name": {"type": "string", "description": "Legacy-compatible field for the target object name."},
+                    "material_name": {"type": "string", "description": "Optional material name."},
                     "color": {
                         "type": "string",
-                        "description": "颜色：red, blue, green, white, black, wood 或 #RRGGBB。",
+                        "description": "Color: red, blue, green, white, black, wood, or #RRGGBB.",
                     },
                 },
                 "required": [],
             },
             {
                 "name": "delete_object",
-                "description": "删除对象。",
+                "description": "Delete an object.",
                 "parameters": {
-                    "target": {"type": "string", "description": "目标对象。"},
-                    "name": {"type": "string", "description": "兼容旧字段，目标对象名。"},
+                    "target": {"type": "string", "description": "Target object."},
+                    "name": {"type": "string", "description": "Legacy-compatible field for the target object name."},
                 },
                 "required": [],
             },
             {
                 "name": "render_scene",
-                "description": "渲染当前场景并返回预览路径。默认会先检查相机视角，如果主体不够近或没有看见所有非结构物体，会自动调整 camera 后再渲染。",
+                "description": "Render the current scene and return the preview path. By default, camera view is checked first and adjusted when subjects are too far away or non-structural objects are not visible.",
                 "parameters": {
-                    "output_path": {"type": "string", "description": "输出图片路径，可选。"},
-                    "resolution_x": {"type": "integer", "description": "宽度，可选。"},
-                    "resolution_y": {"type": "integer", "description": "高度，可选。"},
-                    "auto_adjust_camera": {"type": "boolean", "description": "是否在渲染前自动检查并调整 camera，默认 true。"},
-                    "camera_target": {"type": "string", "description": "可选，指定用于检查构图的目标对象；不填则使用所有非结构资产。"},
-                    "camera_target_fill": {"type": "number", "description": "目标主体画面占比，默认 0.72。"},
+                    "output_path": {"type": "string", "description": "Optional output image path."},
+                    "resolution_x": {"type": "integer", "description": "Optional width."},
+                    "resolution_y": {"type": "integer", "description": "Optional height."},
+                    "auto_adjust_camera": {"type": "boolean", "description": "Whether to check and adjust the camera before rendering. Defaults to true."},
+                    "camera_target": {"type": "string", "description": "Optional target object for composition checking. If omitted, use all non-structural assets."},
+                    "camera_target_fill": {"type": "number", "description": "Target subject fill ratio. Defaults to 0.72."},
                 },
                 "required": [],
             },
             {
                 "name": "adjust_camera_from_render",
-                "description": "Camera agent：先渲染透明 mask 图片，分析目标/场景在图片中的像素位置和占比，再自动平移/推拉 Blender camera，最后渲染新的预览图。适合用户要求调整视角、让对象居中、让画面构图更好或渲染主体太小/太大时使用。",
+                "description": "Camera agent: render a transparent mask, analyze target/scene pixel position and fill ratio, move/dolly the Blender camera, then render a new preview. Use when the user asks to adjust view, center an object, improve composition, or resize the rendered subject.",
                 "parameters": {
-                    "target": {"type": "string", "description": "要构图的目标对象/类别/自然语言描述；不填则使用场景中的非结构资产。"},
-                    "output_path": {"type": "string", "description": "调整后预览图输出路径，可选。"},
-                    "target_fill": {"type": "number", "description": "目标主体画面占比，0.2-0.95，默认 0.72。"},
-                    "max_iterations": {"type": "integer", "description": "根据渲染图迭代调整次数，默认 3。"},
-                    "tolerance": {"type": "number", "description": "居中和缩放误差容忍度，默认 0.06。"},
-                    "resolution_x": {"type": "integer", "description": "分析用 mask 渲染宽度，默认 768。"},
-                    "resolution_y": {"type": "integer", "description": "分析用 mask 渲染高度，默认 432。"},
-                    "final_resolution_x": {"type": "integer", "description": "最终预览图宽度，默认 1280。"},
-                    "final_resolution_y": {"type": "integer", "description": "最终预览图高度，默认 720。"},
+                    "target": {"type": "string", "description": "Target object/category/natural-language description for composition. If omitted, use non-structural scene assets."},
+                    "output_path": {"type": "string", "description": "Optional output path for the adjusted preview image."},
+                    "target_fill": {"type": "number", "description": "Target subject fill ratio, 0.2-0.95. Defaults to 0.72."},
+                    "max_iterations": {"type": "integer", "description": "Number of camera adjustment iterations based on renders. Defaults to 3."},
+                    "tolerance": {"type": "number", "description": "Centering and scale tolerance. Defaults to 0.06."},
+                    "resolution_x": {"type": "integer", "description": "Mask render width for analysis. Defaults to 768."},
+                    "resolution_y": {"type": "integer", "description": "Mask render height for analysis. Defaults to 432."},
+                    "final_resolution_x": {"type": "integer", "description": "Final preview width. Defaults to 1280."},
+                    "final_resolution_y": {"type": "integer", "description": "Final preview height. Defaults to 720."},
                 },
                 "required": [],
             },
             {
                 "name": "adjust_existing_light",
-                "description": "移动并增强场景中已有的 Blender Light，使 prompt 相关物体可辨认；不会新增光源。仅在渲染太暗、物体看不清、Verifier 明确要求调整已有 Light，或用户要求调整光照时使用。",
+                "description": "Move and strengthen an existing Blender Light so prompt-relevant objects are visible. Does not add new lights. Use only when the render is too dark, objects are hard to see, the verifier asks to adjust an existing Light, or the user asks to adjust lighting.",
                 "parameters": {
-                    "target": {"type": "string", "description": "需要照亮的目标对象/类别/自然语言描述；不填则使用所有非结构资产。"},
-                    "light": {"type": "string", "description": "已有 Light 名称，可选；不填则使用场景中的已有 Light。"},
-                    "min_energy": {"type": "number", "description": "已有 Light 的最低能量，默认 900。"},
-                    "height": {"type": "number", "description": "相对目标中心向上的高度，可选。"},
-                    "distance": {"type": "number", "description": "相对目标中心沿相机方向的水平距离，可选。"},
+                    "target": {"type": "string", "description": "Target object/category/natural-language description to illuminate. If omitted, use all non-structural assets."},
+                    "light": {"type": "string", "description": "Optional existing Light name. If omitted, use an existing scene Light."},
+                    "min_energy": {"type": "number", "description": "Minimum energy for the existing Light. Defaults to 900."},
+                    "height": {"type": "number", "description": "Optional height above the target center."},
+                    "distance": {"type": "number", "description": "Optional horizontal distance from the target center along the camera direction."},
                 },
                 "required": [],
             },
@@ -318,8 +318,8 @@ class BlenderAgent:
                     image_urls.append(item["image_url"].get("url", ""))
             if image_urls:
                 if text_content:
-                    text_content += "，"
-                text_content += f"图片url为: {', '.join(image_urls)}"
+                    text_content += ", "
+                text_content += f"image URLs: {', '.join(image_urls)}"
             if text_content:
                 content = text_content
 
@@ -371,8 +371,8 @@ class BlenderAgent:
         return {
             "status": "blocked",
             "message": (
-                f"已阻止添加未在原始指令中明确要求的资产：{category}。"
-                "Agent 将严格按照用户指令执行，不主动丰富场景。"
+                f"Blocked an attempt to add an asset not explicitly requested in the original instruction: {category}. "
+                "The Agent will strictly follow the user instruction and will not enrich the scene proactively."
             ),
             "function": function_call.get("name"),
             "requested_assets": sorted(requested),
@@ -388,16 +388,16 @@ class BlenderAgent:
         functions_to_use = functions if functions is not None else self.functions
         if user_message:
             user_text = self._message_to_text(user_message).strip()
-            if user_text and "继续完成原始用户指令" not in user_text:
+            if user_text and "Continue completing the original user instruction" not in user_text:
                 self.current_user_request_text = user_text
             self.add_message("user", user_message)
 
         if not hasattr(self.llm, "chat_stream"):
-            raise NotImplementedError("当前 LLM 不支持流式响应")
+            raise NotImplementedError("The current LLM does not support streaming responses")
 
         self.current_run_id = uuid.uuid4().hex
         self._last_cancel_check = 0.0
-        self._set_agent_status("running", "LLM 正在生成回复", operation="llm")
+        self._set_agent_status("running", "LLM is generating a response", operation="llm")
         response_stream = self.llm.chat_stream(
             messages=self.messages,
             functions=functions_to_use,
@@ -422,13 +422,13 @@ class BlenderAgent:
             if accumulated_content:
                 self.add_message("assistant", accumulated_content)
             elif function_call:
-                self.add_message("assistant", f"我将执行工具: {function_call['name']}")
+                self.add_message("assistant", f"I will run tool: {function_call['name']}")
 
             if function_call:
                 function_result = self._execute_function(function_call)
                 self.add_message(
                     "user",
-                    f"函数 {function_call['name']} 的执行结果: {json.dumps(function_result, ensure_ascii=False)}",
+                    f"Execution result for tool {function_call['name']}: {json.dumps(function_result, ensure_ascii=False)}",
                 )
                 yield {
                     "content": None,
@@ -436,16 +436,16 @@ class BlenderAgent:
                     "function_result": function_result,
                 }
         except GeneratorExit:
-            self._set_agent_status("cancelled", "UI 已停止 Agent 运行")
+            self._set_agent_status("cancelled", "The UI stopped the Agent run")
             raise
         except RuntimeError as exc:
             if str(exc) != "Agent run cancelled from Blender":
                 raise
-            self._set_agent_status("cancelled", "Blender 已请求停止 Agent 运行")
+            self._set_agent_status("cancelled", "Blender requested the Agent run to stop")
             yield {
-                "content": "已停止运行。",
+                "content": "Run stopped.",
                 "function_call": None,
-                "function_result": {"status": "cancelled", "message": "Blender 已请求停止 Agent 运行"},
+                "function_result": {"status": "cancelled", "message": "Blender requested the Agent run to stop"},
             }
         finally:
             if self.current_run_id:
@@ -460,30 +460,30 @@ class BlenderAgent:
             function_call["arguments"] = arguments
 
             if self.blender_client is None:
-                return {"status": "error", "message": "Blender 未连接，请先连接 Blender 插件服务。"}
+                return {"status": "error", "message": "Blender is not connected. Please connect the Blender add-on service first."}
             if not hasattr(self.blender_client, function_name):
-                return {"status": "error", "message": f"函数 {function_name} 不存在"}
+                return {"status": "error", "message": f"Tool {function_name} does not exist"}
 
             blocked = self._validate_function_call_against_request(function_call)
             if blocked is not None:
                 return blocked
 
             self._raise_if_blender_cancelled(force=True)
-            self._set_agent_status("running", f"正在 Blender 中执行：{function_name}", operation=function_name)
+            self._set_agent_status("running", f"Running in Blender: {function_name}", operation=function_name)
             func = getattr(self.blender_client, function_name)
-            logger.info("执行函数: %s, 参数: %s", function_name, arguments)
+            logger.info("Executing function: %s, args: %s", function_name, arguments)
             result = func(**arguments)
-            logger.info("函数执行结果: %s", result)
+            logger.info("Function result: %s", result)
             self._raise_if_blender_cancelled(force=True)
             return result
         except RuntimeError as exc:
             if str(exc) == "Agent run cancelled from Blender":
                 raise
-            logger.error("执行函数 %s 时出错: %s", function_call.get("name", "未知"), exc)
-            return {"status": "error", "message": f"执行函数时出错: {exc}"}
+            logger.error("Error executing function %s: %s", function_call.get("name", "Unknown"), exc)
+            return {"status": "error", "message": f"Error executing function: {exc}"}
         except Exception as exc:
-            logger.error("执行函数 %s 时出错: %s", function_call.get("name", "未知"), exc)
-            return {"status": "error", "message": f"执行函数时出错: {exc}"}
+            logger.error("Error executing function %s: %s", function_call.get("name", "Unknown"), exc)
+            return {"status": "error", "message": f"Error executing function: {exc}"}
 
     def _set_agent_status(self, state: str, message: str = "", operation: str | None = None) -> None:
         if self.blender_client is None or not hasattr(self.blender_client, "set_agent_status"):
@@ -496,7 +496,7 @@ class BlenderAgent:
                 operation=operation,
             )
         except Exception as exc:
-            logger.debug("同步 Agent 状态到 Blender 失败: %s", exc)
+            logger.debug("Failed to sync Agent status to Blender: %s", exc)
 
     def _raise_if_blender_cancelled(self, force: bool = False) -> None:
         if self.blender_client is None or not hasattr(self.blender_client, "get_agent_status"):
@@ -508,7 +508,7 @@ class BlenderAgent:
         try:
             status = self.blender_client.get_agent_status()
         except Exception as exc:
-            logger.debug("读取 Blender Agent 状态失败: %s", exc)
+            logger.debug("Failed to read Blender Agent status: %s", exc)
             return
         result = status.get("result", status)
         if isinstance(result, dict) and result.get("cancel_requested"):
@@ -516,4 +516,4 @@ class BlenderAgent:
 
     def update_blender_client(self, blender_client: BlenderClient):
         self.blender_client = blender_client
-        logger.info("已更新 Agent 中的 Blender 客户端引用")
+        logger.info("Updated the Agent Blender client reference")

@@ -2,28 +2,28 @@
 
 Standalone natural-language Blender agent for editing Infinigen scenes.
 
-这个工程现在是一个完整独立工程，不再依赖外部的
-`/Users/rason/Developer/GOSIM_HACKATHON/infinigen` 或空的
-`Gosim2026-Paris-main/LLM-Blender-Agent` 目录。
+This project is now fully self-contained. It no longer depends on the external
+`/Users/rason/Developer/GOSIM_HACKATHON/infinigen` directory or the empty
+`Gosim2026-Paris-main/LLM-Blender-Agent` directory.
 
-它包含三部分：
+It contains three main parts:
 
-- `src/`、`ui/`、`app.py`：基于 `LLM-Blender-Agent` 的 Agent、LLM provider 和 Gradio UI。
-- `blender_addon/`、`addon.py`：替换原 Rodin/Hunyuan3D 的 Blender 插件入口，改为 Infinigen-aware socket server。
-- `third_party/infinigen/`：vendored Infinigen 源码和 Blender 4.2 app。
+- `src/`, `ui/`, and `app.py`: the agent, LLM providers, and Gradio UI adapted from `LLM-Blender-Agent`.
+- `blender_addon/` and `addon.py`: the Blender addon entry point, replacing the original Rodin/Hunyuan3D flow with an Infinigen-aware socket server.
+- `third_party/infinigen/`: vendored Infinigen source code and the Blender 4.2 app.
 
-## 目录结构
+## Directory Layout
 
 ```text
 Gosim2026-Paris/
-  addon.py                         # Blender 插件入口，加载 Infinigen-aware addon
-  app.py                           # LLM-Blender-Agent 原 UI 入口
-  src/                             # LLM-Blender-Agent 的 agent / blender client / llm providers
-  ui/                              # LLM-Blender-Agent 的 Gradio UI
+  addon.py                         # Blender addon entry point; loads the Infinigen-aware addon
+  app.py                           # Original LLM-Blender-Agent UI entry point
+  src/                             # LLM-Blender-Agent agent / Blender client / LLM providers
+  ui/                              # LLM-Blender-Agent Gradio UI
   blender_addon/
     gosim_infinigen_agent_addon.py # Blender socket server + scene index + Infinigen tools
-  gosim_blender_agent/             # 额外 CLI / 离线 planner / runner
-  third_party/infinigen/           # Infinigen 源码 + Blender.app
+  gosim_blender_agent/             # Extra CLI / offline planner / runner
+  third_party/infinigen/           # Infinigen source + Blender.app
   scripts/
     start_blender_agent.sh
     start_ui.sh
@@ -31,7 +31,7 @@ Gosim2026-Paris/
     ARCHITECTURE.md
 ```
 
-## 安装
+## Installation
 
 ```bash
 cd /Users/rason/Developer/GOSIM_HACKATHON/Gosim2026-Paris
@@ -39,13 +39,13 @@ conda activate infinigen
 pip install -r requirements.txt
 ```
 
-如果要用 `pip install -e`：
+For editable installation:
 
 ```bash
 pip install -e ".[ui,llm]"
 ```
 
-## 启动 Blender 插件服务
+## Start the Blender Addon Service
 
 ```bash
 cd /Users/rason/Developer/GOSIM_HACKATHON/Gosim2026-Paris
@@ -53,21 +53,21 @@ conda activate infinigen
 bash scripts/start_blender_agent.sh
 ```
 
-这个脚本默认使用工程内的：
+By default, this script uses the bundled Blender binary:
 
 ```text
 third_party/infinigen/Blender.app/Contents/MacOS/Blender
 ```
 
-插件会监听：
+The addon listens on:
 
 ```text
 127.0.0.1:9876
 ```
 
-## 启动 Agent UI
+## Start the Agent UI
 
-另开一个终端：
+In another terminal:
 
 ```bash
 cd /Users/rason/Developer/GOSIM_HACKATHON/Gosim2026-Paris
@@ -75,33 +75,32 @@ conda activate infinigen
 bash scripts/start_ui.sh
 ```
 
-打开：
+Open:
 
 ```text
 http://127.0.0.1:7860
 ```
 
-UI 沿用 LLM-Blender-Agent 的连接、模型选择、聊天、渲染预览流程，但工具函数已经改成 Infinigen 场景编辑工具。
-交互布局保持“左侧网页对话、右侧场景信息和渲染结果”的形式；每次对话工具执行完成后会自动刷新右侧视图。
+The UI keeps the original LLM-Blender-Agent workflow for connection setup, model selection, chat, and render previews, but the tool functions now edit Infinigen scenes. The layout keeps the conversation on the left and scene information plus render output on the right. After each tool execution, the right-side views refresh automatically.
 
-### UI 更新说明
+### UI Notes
 
-当前网页 UI 已针对 Gradio/ModelScope Studio 聊天体验做了整理：
+The current web UI has been cleaned up for the Gradio/ModelScope Studio chat experience:
 
-- 页面采用更干净的暗色主题，顶部连接区、模型初始化区、聊天区、场景信息区和渲染预览区使用统一的面板间距与边框。
-- 聊天对话框支持稳定的左右气泡排版：用户消息在右侧，Agent 输出在左侧，并分别设置了明确的背景色和文字色。
-- 纯文本用户输入会按普通文本消息渲染；只有上传文件时才使用多模态消息结构，避免空文件结构导致用户消息不可见。
-- Agent 的文本回复、函数调用提示和工具执行结果都会触发 UI 刷新，减少流式输出或工具输出不显示的问题。
-- 长文本、JSON、代码块会自动换行或横向滚动，避免在窄窗口中撑破布局。
-- 响应式布局已适配不同浏览器宽度：桌面端保留右侧场景/渲染面板，小屏下消息气泡会自动放宽到可读宽度。
-- 初始化区分成两个 agent 模型选择：Code Generator 负责调用 Blender 工具编辑场景，Visual Verifier 负责读取 render 图并生成下一轮调整指令。
-- 高级设置新增可选的 Visual Verifier 闭环：勾选“启用 Visual Verifier”后，每次用户指令完成并自动渲染后，系统会把 render 图片、用户目标和当前场景信息交给独立的 verifier agent 判断。
-- “Visual Verifier 最大迭代次数”控制 verifier + Blender editing 的最多循环次数；如果 verifier 判断结果已经差不多，会提前结束。
-- 当 verifier 认为还需要调整时，它会生成一段给 code generator 的中文 text instruction，要求继续调整物体、camera、lighting、缩放、旋转、材质或构图参数；随后 Agent 会用现有 Blender 工具执行编辑并重新渲染。
+- The page uses a cleaner dark theme with consistent panel spacing and borders across the connection area, model initialization area, chat area, scene information area, and render preview area.
+- Chat messages use stable left/right bubble alignment: user messages appear on the right, agent output appears on the left, each with explicit background and text colors.
+- Plain-text user input is rendered as a normal text message. Multimodal message structures are used only when files are uploaded, avoiding invisible user messages caused by empty file payloads.
+- Agent text replies, function-call notices, and tool results all trigger UI refreshes, reducing cases where streamed output or tool output is not displayed.
+- Long text, JSON, and code blocks wrap or scroll horizontally to avoid breaking narrow layouts.
+- The responsive layout supports different browser widths: desktop keeps the scene/render panel on the right, while smaller screens widen message bubbles for readability.
+- The initialization area separates the two agent model choices: Code Generator edits the Blender scene through tools, while Visual Verifier reads render images and produces the next adjustment instruction.
+- Advanced settings include an optional Visual Verifier loop. When enabled, each completed user instruction is rendered automatically, then the render image, user goal, and current scene information are sent to an independent verifier agent.
+- `Visual Verifier max iterations` controls the maximum number of verifier plus Blender editing cycles. If the verifier decides the result is good enough, the loop exits early.
+- When the verifier requests another adjustment, it produces a text instruction for the code generator to continue adjusting objects, camera, lighting, scale, rotation, material, or framing parameters. The agent then uses the existing Blender tools, renders again, and sends the new result back to the Visual Verifier.
 
-## 当前 Agent 工具
+## Current Agent Tools
 
-LLM 可以调用：
+The LLM can call:
 
 - `get_scene_info`
 - `rebuild_scene_index`
@@ -121,31 +120,30 @@ LLM 可以调用：
 - `adjust_camera_from_render`
 - `render_scene`
 
-原来的 Rodin、Hyper3D、Hunyuan3D-2 模型生成入口已经不作为功能暴露。
-兼容旧函数名的 `generate_3d_model` 现在会转发到 `add_infinigen_asset`。
+The original Rodin, Hyper3D, and Hunyuan3D-2 model generation entry points are no longer exposed as primary features. The legacy-compatible `generate_3d_model` function now forwards to `add_infinigen_asset`.
 
-### Camera agent
+### Camera Agent
 
-`adjust_camera_from_render` 会在 Blender 内部先渲染一张透明背景的 mask 图，读取图片 alpha 像素包围盒，判断目标在画面中的中心偏移和占比，然后自动平移/推拉当前 camera，并渲染最终预览图。
+`adjust_camera_from_render` first renders a transparent-background mask image inside Blender, reads the alpha-pixel bounding box, estimates the target center offset and image occupancy, then automatically pans or dollies the current camera and renders the final preview.
 
-`render_scene` 默认会在每次正式渲染前自动检查 camera 视角。视角好的标准是：
+`render_scene` checks the camera view automatically before each formal render. A good view means:
 
-- 所有非结构资产都在 camera 画面内。
-- 主体在画面中占比足够大，避免相机离物体太远。
+- All non-structural assets are inside the camera frame.
+- The subject occupies enough of the image, avoiding a camera that is too far away.
 
-如果检查失败，`render_scene` 会先根据场景物体整体包围盒把 camera 对准并拉近，再用透明 mask render 微调居中和距离，然后继续输出最终渲染图。返回结果中的 `camera_auto_adjust` 会记录是否调整、调整前后质量、mask 路径和每步移动信息。
+If the check fails, `render_scene` first aims and moves the camera closer based on the overall object bounding box, then uses transparent mask rendering to fine-tune centering and distance before producing the final render. The returned `camera_auto_adjust` data records whether adjustment happened, quality before and after adjustment, mask paths, and each movement step.
 
-可选参数：
+Optional parameters:
 
-- `target`：要构图的对象、类别或自然语言描述；不填则默认使用场景中的非结构资产。
-- `target_fill`：目标主体画面占比，默认 `0.72`。
-- `max_iterations`：根据 render 结果迭代调整 camera 的次数，默认 `3`。
-- `output_path`：最终预览图输出路径；不填则保存到当前 blend 目录的 `renders/camera_agent_preview.png`。
-- `render_scene` 额外支持 `auto_adjust_camera`、`camera_target`、`camera_target_fill`；默认 `auto_adjust_camera=true`。
+- `target`: object, category, or natural-language description to frame. If omitted, all non-structural scene assets are used.
+- `target_fill`: target image occupancy, default `0.72`.
+- `max_iterations`: number of camera-adjustment iterations based on render feedback, default `3`.
+- `output_path`: final preview output path. If omitted, the image is saved as `renders/camera_agent_preview.png` beside the current blend file.
+- `render_scene` additionally supports `auto_adjust_camera`, `camera_target`, and `camera_target_fill`; `auto_adjust_camera` defaults to `true`.
 
-### Visual Verifier agent
+### Visual Verifier Agent
 
-Visual Verifier 是独立 agent，不新增 Blender socket 命令。配置文件用 `agents.code_generator` 和 `agents.visual_verifier` 分别指定两套 API 调用使用的 LLM 类型：
+Visual Verifier is an independent agent and does not add new Blender socket commands. Configure separate LLM types for the two API call paths with `agents.code_generator` and `agents.visual_verifier`:
 
 ```json
 {
@@ -172,72 +170,72 @@ Visual Verifier 是独立 agent，不新增 Blender socket 命令。配置文件
 }
 ```
 
-`model_type` 可以是内置 provider 名称，例如 `r9s`，也可以是 `llm` 下面的自定义配置名，例如 `r9s_code`。自定义配置建议显式写 `provider`，用于指定底层 API 适配器。
+`model_type` can be a built-in provider name such as `r9s`, or a custom configuration key under `llm`, such as `r9s_code`. Custom configurations should explicitly set `provider` to select the underlying API adapter.
 
-UI 初始化时也可以分别选择 Code Generator 模型和 Visual Verifier 模型。Verifier 输入包括：
+During UI initialization, the Code Generator model and Visual Verifier model can also be selected separately. The verifier input includes:
 
-- 自动渲染得到的图片路径。
-- 用户原始自然语言目标。
-- 最新场景信息文本。
+- The auto-rendered image path.
+- The original natural-language user goal.
+- The latest scene information text.
 
-Verifier 只负责判断 render 是否接近目标，并输出结构化结果：
+The verifier only judges whether the render is close to the goal and returns a structured result:
 
 ```json
 {
   "done": false,
-  "reason": "主体偏左且灯光偏暗",
-  "instruction": "把 camera 向右平移一点并增加主灯亮度，让桌子和台灯位于画面中心。"
+  "reason": "The subject is left of center and the lighting is too dark.",
+  "instruction": "Move the camera slightly to the right and increase the existing main light intensity so the desk and desk lamp are centered."
 }
 ```
 
-如果 `done=true`，闭环提前结束；如果 `done=false`，`instruction` 会作为下一轮 Code Generator agent 输入，Code Generator 会继续调用现有工具编辑 Blender 场景，然后重新 render 并再次交给 Visual Verifier。循环次数由 UI 中的“Visual Verifier 最大迭代次数”控制。
+If `done=true`, the loop exits early. If `done=false`, `instruction` becomes the next Code Generator agent input. The Code Generator continues using the existing tools to edit the Blender scene, renders again, and sends the new render back to Visual Verifier. The loop count is controlled by `Visual Verifier max iterations` in the UI.
 
-## 示例指令
+## Example Instructions
 
 ```text
-添加一张书桌
-添加一盏台灯
-添加一个苹果
+add a desk
+add a desk lamp
+add an apple
 add a pineapple
-把台灯放到桌子上
-把床往右移动 0.3 米
-把桌子放大 1.2
-把椅子放到床旁边
-把柜子变成黑色
-\editing 场景中的桌子改成绿色
-调整相机让桌子居中
-调整视角，让场景主体更大一些
-渲染预览
-保存场景
+put the desk lamp on the desk
+move the bed 0.3 meters to the right
+scale the desk by 1.2
+put the chair beside the bed
+make the cabinet black
+\editing make the table in the scene green
+adjust the camera so the desk is centered
+adjust the view so the main scene subject is larger
+render preview
+save the scene
 ```
 
-`add_infinigen_asset` 额外支持 `third_party/infinigen/infinigen/assets/objects/fruits`
-下的水果资产：`apple`, `blackberry`, `green_coconut`, `hairy_coconut`,
-`durian`, `pineapple`, `starfruit`, `strawberry`, `compositional_fruit`。
-对应中文 prompt 如“苹果、黑莓、青椰子、椰子、榴莲、菠萝、凤梨、杨桃、草莓、组合水果”也会被解析。
+`add_infinigen_asset` additionally supports the fruit assets under
+`third_party/infinigen/infinigen/assets/objects/fruits`: `apple`, `blackberry`,
+`green_coconut`, `hairy_coconut`, `durian`, `pineapple`, `starfruit`,
+`strawberry`, and `compositional_fruit`. Chinese-language aliases for these fruit names are also parsed.
 
 ## CLI
 
-测试连接：
+Test the connection:
 
 ```bash
 python -m gosim_blender_agent.cli ping
 ```
 
-打开已有 `.blend`：
+Open an existing `.blend` file:
 
 ```bash
 python -m gosim_blender_agent.cli open /absolute/path/to/scene.blend
 ```
 
-自然语言命令：
+Natural-language commands:
 
 ```bash
-python -m gosim_blender_agent.cli chat "添加一张书桌"
-python -m gosim_blender_agent.cli chat "把台灯放到桌子上"
+python -m gosim_blender_agent.cli chat "add a desk"
+python -m gosim_blender_agent.cli chat "put the desk lamp on the desk"
 ```
 
-生成一个单卧室 Infinigen 场景：
+Generate a single-bedroom Infinigen scene:
 
 ```bash
 python -m gosim_blender_agent.cli generate-bedroom \
@@ -245,9 +243,9 @@ python -m gosim_blender_agent.cli generate-bedroom \
   --seed 0
 ```
 
-## 场景索引
+## Scene Index
 
-插件会把当前场景整理成 `gosim_scene_index.json`，字段包括：
+The addon organizes the current scene into `gosim_scene_index.json` with fields including:
 
 - `object_id`
 - `category`
@@ -264,16 +262,16 @@ python -m gosim_blender_agent.cli generate-bedroom \
 - `description`
 - `generation`
 
-后续要接 RAG/vector DB 时，可以直接对 `description` 和 `relations` 做 embedding。
+For future RAG/vector DB integration, `description` and `relations` can be embedded directly.
 
-生成资产会额外写入 `generation_scripts/{asset_id}.py`，用于追踪 factory、seed、prompt 和后续 editing 修改。
+Generated assets also write `generation_scripts/{asset_id}.py`, which tracks the factory, seed, prompt, and later editing changes.
 
-## 独立性说明
+## Self-Containment
 
-默认路径都指向工程内部：
+Default paths point inside this project:
 
 - Infinigen root: `third_party/infinigen`
 - Blender binary: `third_party/infinigen/Blender.app/Contents/MacOS/Blender`
 - Blender addon: `addon.py`
 
-只要这个目录完整拷走，Python 依赖装好，就不需要再依赖外部项目目录。
+As long as this directory is copied completely and the Python dependencies are installed, no external project directories are required.

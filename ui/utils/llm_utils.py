@@ -24,7 +24,7 @@ def load_config(config_path=DEFAULT_CONFIG_PATH):
     """
     try:
         if not os.path.exists(config_path):
-            logger.error(f"配置文件不存在: {config_path}")
+            logger.error(f"Config file does not exist: {config_path}")
             return None
 
         with open(config_path, "r", encoding="utf-8") as f:
@@ -33,7 +33,7 @@ def load_config(config_path=DEFAULT_CONFIG_PATH):
         return config
 
     except Exception as e:
-        logger.error(f"加载配置文件失败: {str(e)}")
+        logger.error(f"Failed to load config file: {str(e)}")
         return None
 
 def get_available_models(config):
@@ -102,12 +102,12 @@ def initialize_agent(session_id, model_type, temperature, verifier_model_type=No
                 # 尝试清理旧实例
                 del globals.agents[session_id]
             except Exception as e:
-                logger.warning(f"清理旧Agent实例时出错: {str(e)}")
+                logger.warning(f"Error cleaning up old Agent instance: {str(e)}")
 
         # 加载配置
         config = load_config()
         if not config:
-            return "加载配置失败，请检查配置文件"
+            return "Failed to load config. Please check the config file."
 
         # 创建LLM实例
         try:
@@ -115,7 +115,7 @@ def initialize_agent(session_id, model_type, temperature, verifier_model_type=No
             code_generator_llm = LLMFactory.create_from_config_file(DEFAULT_CONFIG_PATH, model_type)
             # 验证LLM实例
             if not code_generator_llm or not hasattr(code_generator_llm, "chat"):
-                return f"模型 {model_type} 初始化失败: 无效的LLM实例"
+                return f"Model {model_type} failed to initialize: invalid LLM instance."
 
             verifier_model_type = verifier_model_type or get_configured_agent_model(
                 config,
@@ -124,10 +124,10 @@ def initialize_agent(session_id, model_type, temperature, verifier_model_type=No
             )
             verifier_llm = LLMFactory.create_from_config_file(DEFAULT_CONFIG_PATH, verifier_model_type)
             if not verifier_llm or not hasattr(verifier_llm, "chat"):
-                return f"Verifier 模型 {verifier_model_type} 初始化失败: 无效的LLM实例"
+                return f"Verifier model {verifier_model_type} failed to initialize: invalid LLM instance."
         except Exception as e:
-            logger.error(f"创建LLM实例时出错: {str(e)}")
-            return f"初始化模型失败: {str(e)}"
+            logger.error(f"Error creating LLM instance: {str(e)}")
+            return f"Model initialization failed: {str(e)}"
 
         # 创建Agent，如果已连接Blender，则使用Blender客户端，否则使用None
         try:
@@ -140,7 +140,7 @@ def initialize_agent(session_id, model_type, temperature, verifier_model_type=No
                     blender_client = globals.blender_clients[session_id]
                 else:
                     blender_client = None
-                    logger.warning("Blender客户端存在但未连接")
+                    logger.warning("Blender client exists but is not connected")
 
             # 创建Agent实例。code generator 和 visual verifier 使用两套独立 LLM client。
             verifier_agent = VisualVerifierAgent(verifier_llm)
@@ -148,27 +148,27 @@ def initialize_agent(session_id, model_type, temperature, verifier_model_type=No
 
             # 验证Agent
             if not agent or not hasattr(agent, "functions") or len(agent.functions) == 0:
-                return "Agent创建失败: 无效的Agent实例或没有可用函数"
+                return "Agent creation failed: invalid Agent instance or no available tools."
 
             # 存储Agent实例到全局字典
             globals.agents[session_id] = agent
 
             # 返回状态信息
-            blender_status = "已连接" if blender_client is not None else "未连接"
+            blender_status = "connected" if blender_client is not None else "not connected"
             return (
-                "初始化成功，"
-                f"Code Generator模型: {model_type}, "
-                f"Visual Verifier模型: {verifier_model_type}, "
-                f"Blender状态: {blender_status}, 可用函数: {len(agent.functions)}个"
+                "Initialization successful. "
+                f"Code Generator model: {model_type}; "
+                f"Visual Verifier model: {verifier_model_type}; "
+                f"Blender status: {blender_status}; available tools: {len(agent.functions)}."
             )
 
         except Exception as e:
-            logger.error(f"创建Agent实例时出错: {str(e)}")
-            return f"创建Agent时出错: {str(e)}"
+            logger.error(f"Error creating Agent instance: {str(e)}")
+            return f"Error creating Agent: {str(e)}"
 
     except Exception as e:
-        logger.error(f"初始化Agent时出错: {str(e)}")
-        return f"初始化出错: {str(e)}"
+        logger.error(f"Error initializing Agent: {str(e)}")
+        return f"Initialization error: {str(e)}"
 
 def get_available_functions(session_id, agents=None):
     """
@@ -188,7 +188,7 @@ def get_available_functions(session_id, agents=None):
         return []
 
     agent = globals.agents[session_id]
-    return [(func["name"], func.get("description", "无描述")) for func in agent.functions]
+    return [(func["name"], func.get("description", "No description")) for func in agent.functions]
 
 def get_function_names(session_id, agents=None):
     """

@@ -82,13 +82,13 @@ class R9SLLM(BaseLLM):
                         # 作为最后手段返回原始对象字符串
                         return {"content": str(resp), "function_call": None}
                     except Exception as e2:
-                        return {"content": f"与R9S API通信出错: {str(e2)}", "function_call": None, "error": str(e2)}
+                        return {"content": f"R9S API communication error: {str(e2)}", "function_call": None, "error": str(e2)}
                 else:
-                    return {"content": f"与R9S API通信出错: {str(e)}", "function_call": None, "error": str(e)}
+                    return {"content": f"R9S API communication error: {str(e)}", "function_call": None, "error": str(e)}
 
         except Exception as e:
             return {
-                "content": f"与R9S API通信出错: {str(e)}",
+                "content": f"R9S API communication error: {str(e)}",
                 "function_call": None,
                 "error": str(e)
             }
@@ -195,6 +195,6 @@ class R9SLLM(BaseLLM):
             return result
 
         except Exception as e:
-            result["content"] = f"解析R9S API响应出错: {str(e)}"
+            result["content"] = f"Error parsing R9S API response: {str(e)}"
             result["error"] = str(e)
             return result

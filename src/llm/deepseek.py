@@ -60,7 +60,7 @@ class DeepSeekLLM(BaseLLM):
         
         except Exception as e:
             return {
-                "content": f"与DeepSeek API通信出错: {str(e)}",
+                "content": f"DeepSeek API communication error: {str(e)}",
                 "function_call": None,
                 "error": str(e)
             }

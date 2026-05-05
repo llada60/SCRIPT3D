@@ -58,18 +58,18 @@ class BlenderClient:
                     response_data += data
 
             if not response_data:
-                return {"status": "error", "message": "没有收到 Blender 响应"}
+                return {"status": "error", "message": "No response received from Blender"}
 
             response = json.loads(response_data.decode("utf-8"))
             if "status" not in response:
                 response["status"] = "success" if response.get("ok") else "error"
             if response.get("status") == "error" and "message" not in response:
-                response["message"] = response.get("error", "未知错误")
+                response["message"] = response.get("error", "Unknown error")
             return response
         except socket.timeout:
-            return {"status": "error", "message": "连接 Blender MCP 服务器超时"}
+            return {"status": "error", "message": "Timed out connecting to the Blender MCP server"}
         except Exception as exc:
-            return {"status": "error", "message": f"连接 Blender MCP 服务器失败: {exc}"}
+            return {"status": "error", "message": f"Failed to connect to the Blender MCP server: {exc}"}
 
     def get_scene_info(self) -> Dict[str, Any]:
         return self.send_command("get_scene_info")
@@ -152,7 +152,7 @@ class BlenderClient:
         """
         category = object_name or text
         if not category:
-            return {"status": "error", "message": "请提供要生成的 Infinigen 资产类别"}
+            return {"status": "error", "message": "Please provide the Infinigen asset category to generate"}
         return self.add_infinigen_asset(category_or_factory=category)
 
     def edit_generated_asset(
@@ -200,7 +200,7 @@ class BlenderClient:
             matches = result.get("result", {}).get("matches", [])
             if matches:
                 return {"status": "success", "result": matches[0]}
-        return {"status": "error", "message": f"未找到对象: {name}"}
+        return {"status": "error", "message": f"Object not found: {name}"}
 
     def set_material(
         self,

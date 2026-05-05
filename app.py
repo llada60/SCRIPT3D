@@ -45,11 +45,10 @@ def main():
             inbrowser=os.getenv("GOSIM_UI_INBROWSER", "1") != "0"
         )
     except Exception as e:
-        logger.error(f"启动Gradio界面时出错: {str(e)}")
-        # 打印完整堆栈跟踪以便调试
-        print("\n\n===== 错误详情 =====")
+        logger.error(f"Error starting the Gradio UI: {str(e)}")
+        print("\n\n===== Error Details =====")
         traceback.print_exc()
-        print("\n如果您看到'update_status_after_message'未定义的错误，请确保已正确更新所有代码。")
+        print("\nIf you see an 'update_status_after_message' undefined error, make sure all code has been updated correctly.")
 
 def fail_safe_main():
     """提供后备的UI，防止主UI无法启动"""
@@ -58,21 +57,21 @@ def fail_safe_main():
         main()
     except Exception as e:
         # 如果主UI无法启动，则显示一个简单的错误信息界面
-        logger.error(f"启动应用失败，显示后备界面: {str(e)}")
-        with gr.Blocks(title="GOSIM Infinigen Blender Agent (错误模式)") as app:
-            gr.Markdown("## GOSIM Infinigen Blender Agent 启动错误")
+        logger.error(f"Failed to start the app; showing fallback UI: {str(e)}")
+        with gr.Blocks(title="GOSIM Infinigen Blender Agent (Error Mode)") as app:
+            gr.Markdown("## GOSIM Infinigen Blender Agent Startup Error")
             gr.Markdown(f"""
-            应用程序启动时发生错误:
+            An error occurred while starting the application:
             
             ```
             {traceback.format_exc()}
             ```
             
-            请检查日志和控制台输出以获取更多信息。
+            Check the logs and console output for more information.
             """)
             
             with gr.Row():
-                restart_btn = gr.Button("重启应用")
+                restart_btn = gr.Button("Restart App")
                 
             def restart():
                 # 重启应用程序

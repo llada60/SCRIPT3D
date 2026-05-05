@@ -50,19 +50,19 @@ def connect_to_blender(host, port, blender_clients, session_id):
             if session_id in globals.agents and globals.agents[session_id] is not None:
                 try:
                     globals.agents[session_id].update_blender_client(client)
-                    return f"成功连接到Blender服务器: {host}:{port}，并已更新Agent中的Blender客户端"
+                    return f"Connected to Blender server at {host}:{port}. The Agent Blender client was updated."
                 except AttributeError:
-                    return f"成功连接到Blender服务器: {host}:{port}，但无法更新Agent（缺少update_blender_client方法）"
+                    return f"Connected to Blender server at {host}:{port}, but the Agent could not be updated because update_blender_client is missing."
                 except Exception as e:
-                    return f"成功连接到Blender服务器: {host}:{port}，但更新Agent时出错: {str(e)}"
+                    return f"Connected to Blender server at {host}:{port}, but updating the Agent failed: {str(e)}"
             
-            return f"成功连接到Blender服务器: {host}:{port}"
+            return f"Connected to Blender server at {host}:{port}"
         else:
-            return "连接失败，请检查Blender服务器是否启动，或检查地址和端口是否正确"
+            return "Connection failed. Check that the Blender server is running and that the host/port are correct."
     
     except Exception as e:
-        logger.error(f"连接Blender时出错: {str(e)}")
-        return f"连接出错: {str(e)}"
+        logger.error(f"Error connecting to Blender: {str(e)}")
+        return f"Connection error: {str(e)}"
 
 def render_scene_and_return_image(session_id, blender_clients):
     """
@@ -79,7 +79,7 @@ def render_scene_and_return_image(session_id, blender_clients):
     import ui.globals as globals
     
     if session_id not in globals.blender_clients:
-        return None, "Blender未连接，无法进行渲染"
+        return None, "Blender is not connected. Cannot render."
     
     try:
         client = globals.blender_clients[session_id]
@@ -100,11 +100,11 @@ def render_scene_and_return_image(session_id, blender_clients):
                     f.write(image_bytes)
                 return temp_file.name, None
             
-        return None, f"渲染失败: {result.get('message', '未知错误')}"
+        return None, f"Render failed: {result.get('message', 'Unknown error')}"
     
     except Exception as e:
-        logger.error(f"渲染场景时出错: {str(e)}")
-        return None, f"渲染出错: {str(e)}"
+        logger.error(f"Error rendering scene: {str(e)}")
+        return None, f"Render error: {str(e)}"
 
 def get_scene_info(session_id, blender_clients):
     """
@@ -121,7 +121,7 @@ def get_scene_info(session_id, blender_clients):
     import ui.globals as globals
     
     if session_id not in globals.blender_clients:
-        return "Blender未连接，无法获取场景信息", None
+        return "Blender is not connected. Cannot fetch scene info.", None
     
     try:
         client = globals.blender_clients[session_id]
@@ -129,22 +129,22 @@ def get_scene_info(session_id, blender_clients):
         
         if result.get("status") == "success":
             scene_data = result.get("result", {})
-            info_text = f"场景名称: {scene_data.get('name', '未知')}\n"
-            info_text += f"对象数量: {len(scene_data.get('objects', []))}\n\n"
+            info_text = f"Scene Name: {scene_data.get('name', 'Unknown')}\n"
+            info_text += f"Object Count: {len(scene_data.get('objects', []))}\n\n"
             
             # 添加对象列表
             objects = scene_data.get("objects", [])
             if objects:
-                info_text += "对象列表:\n"
+                info_text += "Objects:\n"
                 for obj in objects:
-                    obj_type = obj.get("type", "未知")
-                    obj_name = obj.get("name", "未知")
+                    obj_type = obj.get("type", "Unknown")
+                    obj_name = obj.get("name", "Unknown")
                     info_text += f"- {obj_name} ({obj_type})\n"
             
             return info_text, scene_data
         else:
-            return f"获取场景信息失败: {result.get('message', '未知错误')}", None
+            return f"Failed to fetch scene info: {result.get('message', 'Unknown error')}", None
     
     except Exception as e:
-        logger.error(f"获取场景信息时出错: {str(e)}")
-        return f"获取场景信息出错: {str(e)}", None 
+        logger.error(f"Error fetching scene info: {str(e)}")
+        return f"Scene info error: {str(e)}", None 

@@ -51,7 +51,7 @@ class ClaudeLLM(BaseLLM):
                 "messages": anthropic_messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens or 4096,
-                "system": "你是一位专业的3D建模助手，可以通过自然语言指令控制Blender软件进行3D建模。"
+                "system": "You are a professional 3D scene-editing assistant. Control Blender through natural-language instructions and tool calls. Reply in English."
             }
             
             # 添加工具（函数）
@@ -66,7 +66,7 @@ class ClaudeLLM(BaseLLM):
         
         except Exception as e:
             return {
-                "content": f"与Claude API通信出错: {str(e)}",
+                "content": f"Claude API communication error: {str(e)}",
                 "function_call": None,
                 "error": str(e)
             }

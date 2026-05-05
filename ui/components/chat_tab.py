@@ -109,28 +109,28 @@ def create_chat_tab(session_id_param):
         # 步骤1和步骤2放在整行
         with gr.Row(elem_classes=["setup-grid"]):
             with gr.Column(scale=1, elem_classes=["setup-card"]):
-                gr.Markdown("## 步骤1: 连接到Blender")
+                gr.Markdown("## Step 1: Connect to Blender")
                 
                 # 主机和端口放在同一行
                 with gr.Row():
-                    blender_host = gr.Textbox(label="Blender主机", value="localhost", scale=3)
-                    blender_port = gr.Number(label="Blender端口", value=9876, scale=1)
+                    blender_host = gr.Textbox(label="Blender Host", value="localhost", scale=3)
+                    blender_port = gr.Number(label="Blender Port", value=9876, scale=1)
                 
                 # 状态和按钮放在同一行，按钮在右侧
                 with gr.Row(elem_classes=["secondary-actions"]):
-                    connection_status = gr.Textbox(label="连接状态", interactive=False, scale=3)
+                    connection_status = gr.Textbox(label="Connection Status", interactive=False, scale=3)
                     
                     # 使用列来垂直排列两个按钮
                     with gr.Column(scale=1):
-                        connect_btn = gr.Button("连接Blender", variant="primary")
-                        help_btn = gr.Button("如何启动插件", variant="secondary", size="md")
+                        connect_btn = gr.Button("Connect Blender", variant="primary")
+                        help_btn = gr.Button("Start Add-on Help", variant="secondary", size="md")
                 
                 # 创建模态窗用于显示GIF，初始设置为不可见
                 with Modal(visible=False) as addon_help_modal:
-                    gr.Markdown("## 如何启动Blender插件")
+                    gr.Markdown("## How to Start the Blender Add-on")
                     gif_path = os.path.join("asserts", "guide", "how_to_start_addon.gif")
                     gr.Image(value=gif_path, show_label=False)
-                    close_btn = gr.Button("关闭")
+                    close_btn = gr.Button("Close")
                 
                 # 设置帮助按钮点击事件，打开模态窗
                 help_btn.click(lambda: Modal(visible=True), None, addon_help_modal)
@@ -138,17 +138,17 @@ def create_chat_tab(session_id_param):
                 close_btn.click(lambda: Modal(visible=False), None, addon_help_modal)
             
             with gr.Column(scale=1, elem_classes=["setup-card"]):
-                gr.Markdown("## 步骤2: 初始化LLM模型")
+                gr.Markdown("## Step 2: Initialize LLM Models")
                 with gr.Row():
                     model_selector = gr.Dropdown(
-                        label="Code Generator模型",
+                        label="Code Generator Model",
                         choices=available_models,
                         value=default_code_generator_model
                         if default_code_generator_model in available_models
                         else available_models[0],
                     )
                     verifier_model_selector = gr.Dropdown(
-                        label="Visual Verifier模型",
+                        label="Visual Verifier Model",
                         choices=available_models,
                         value=default_visual_verifier_model
                         if default_visual_verifier_model in available_models
@@ -157,55 +157,55 @@ def create_chat_tab(session_id_param):
                 
                 # 状态和按钮放在同一行，按钮在右侧
                 with gr.Row(elem_classes=["secondary-actions"]):
-                    initialization_status = gr.Textbox(label="初始化状态", interactive=False, scale=3)
+                    initialization_status = gr.Textbox(label="Initialization Status", interactive=False, scale=3)
                     
                     # 使用列来垂直排列两个按钮
                     with gr.Column(scale=1):
-                        initialize_btn = gr.Button("初始化Agent", variant="primary")
-                        advanced_settings_btn = gr.Button("高级设置", variant="secondary", size="md")
+                        initialize_btn = gr.Button("Initialize Agent", variant="primary")
+                        advanced_settings_btn = gr.Button("Advanced Settings", variant="secondary", size="md")
                 
                 # 创建高级设置的模态窗口
                 with Modal(visible=False) as advanced_settings_modal:
-                    gr.Markdown("## 高级设置")
+                    gr.Markdown("## Advanced Settings")
                     function_checkboxes = gr.CheckboxGroup(
-                        label="选择可用的函数",
+                        label="Enabled Tools",
                         choices=["all"],
                         value=["all"]
                     )
                     
                     with gr.Row():
-                        auto_update_info = gr.Checkbox(label="自动获取场景信息", value=True)
-                        auto_render = gr.Checkbox(label="自动渲染", value=True)
+                        auto_update_info = gr.Checkbox(label="Auto-refresh Scene Info", value=True)
+                        auto_render = gr.Checkbox(label="Auto Render", value=True)
                     
                     include_in_context = gr.Checkbox(
-                        label="将场景信息和渲染结果加入LLM上下文",
+                        label="Include scene info and render output in LLM context",
                         value=True,  # 默认勾选
-                        info="选中时，会将当前场景信息加入到LLM的上下文中，以便更好地理解场景状态"
+                        info="When enabled, the current scene state is included in the LLM context."
                     )
 
                     with gr.Row():
                         enable_visual_verifier = gr.Checkbox(
-                            label="启用 Visual Verifier",
+                            label="Enable Visual Verifier",
                             value=True,
-                            info="选中后，每次自动渲染后只检查 prompt 一致性、物理常识和生活习惯，并把必要调整交给 Agent。",
+                            info="After each auto render, verify prompt consistency, basic physics, and practical plausibility.",
                         )
                         visual_verifier_iterations = gr.Slider(
-                            label="Visual Verifier 最大迭代次数",
+                            label="Visual Verifier Max Iterations",
                             minimum=1,
                             maximum=5,
                             step=1,
                             value=2,
-                            info="Verifier 认为渲染结果已接近目标时会提前结束。",
+                            info="Stops early when the verifier considers the render close enough to the goal.",
                         )
                     
-                    close_advanced_settings_btn = gr.Button("关闭")
+                    close_advanced_settings_btn = gr.Button("Close")
                 
                 # 设置高级设置按钮点击事件
                 advanced_settings_btn.click(lambda: Modal(visible=True), None, advanced_settings_modal)
                 # 设置关闭按钮点击事件
                 close_advanced_settings_btn.click(lambda: Modal(visible=False), None, advanced_settings_modal)
         
-        gr.Markdown("## 步骤3: 开始与Blender对话", elem_classes=["section-title"])
+        gr.Markdown("## Step 3: Chat with Blender", elem_classes=["section-title"])
         
         # 聊天界面部分
         with gr.Row(elem_classes=["workspace-grid"]):
@@ -217,21 +217,21 @@ def create_chat_tab(session_id_param):
             # 右侧：显示区域
             with gr.Column(scale=1, elem_classes=["side-panel"]):
                 scene_info = gr.Textbox(
-                    label="场景信息",
+                    label="Scene Info",
                     interactive=False,
                     lines=12,
                     elem_classes=["scene-info"],
                 )
                 render_image = gr.Image(
-                    label="渲染结果",
+                    label="Render Result",
                     interactive=False,
                     height=360,
                     elem_classes=["render-preview"],
                 )
                 
                 with gr.Row(elem_classes=["primary-actions", "action-row"]):
-                    render_btn = gr.Button("手动渲染")
-                    update_info_btn = gr.Button("更新场景信息")
+                    render_btn = gr.Button("Render Now")
+                    update_info_btn = gr.Button("Refresh Scene Info")
     
     
         # 手动渲染按钮

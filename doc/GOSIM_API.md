@@ -50,7 +50,7 @@ and a reproducible Python record under `generation_scripts/{asset_id}.py`.
 ```json
 {
   "target": "desk",
-  "prompt": "场景中的桌子改成绿色",
+  "prompt": "Make the desk in the scene green.",
   "color": "green",
   "preserve_size": true
 }

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -13,35 +14,43 @@ from ..llm.base import BaseLLM
 logger = logging.getLogger(__name__)
 
 
-VISUAL_VERIFIER_SYSTEM_PROMPT = """你是 Blender 场景的 visual verifier。
-你会看到一次 render 结果、用户原始目标和当前场景信息。你的任务不是美化画面，而是校验生成结果是否与用户 prompt 一致，并且是否符合物理常识和生活习惯。
+VISUAL_VERIFIER_SYSTEM_PROMPT = """You are the visual verifier for a Blender scene.
+You will see one render result, the user's original goal, and current scene information. Your job is not to beautify the image; your job is to verify whether the generated result matches the user's prompt and follows physical common sense and everyday-use plausibility.
 
-只返回 JSON，不要返回 Markdown：
+Return JSON only. Do not return Markdown:
 {
   "done": true | false,
-  "reason": "一句话说明判断依据",
-  "instruction": "如果 done=false，写给 Blender code generator 的具体中文调整指令；如果 done=true 留空"
+  "reason": "One sentence explaining the judgment.",
+  "instruction": "If done=false, write a specific adjustment instruction for the Blender code generator in English. If done=true, leave this empty."
 }
 
-核心职责：
-- 只校验用户 prompt 中要求的内容是否出现、是否多出未要求物体、属性是否一致、空间关系是否正确。
-- 校验物理常识和生活习惯：支撑接触、悬浮、穿模、重叠/碰撞、相对比例、摆放朝向、人与物日常使用方式。
-- 使用相对比例和上下文判断大小，不要使用固定绝对尺寸阈值。例如判断苹果、草莓相对桌子和彼此是否像真实桌面物件，而不是输出固定米数。
-- 用户说“在桌子旁边放张椅子”时，椅子应放在桌边且坐垫/正面朝向桌子，像可以坐下使用；不要只检查位置距离。
-- 椅子靠桌时要检查是否穿进桌面、桌腿或其他物体；椅子应从可坐的一侧面向桌子，而不是从桌腿阻挡的一侧硬塞进去。
-- 如果渲染太暗导致 prompt 相关物体无法辨认，或相机太远/裁切导致无法确认所有物体关系，可以返回 done=false，但修复只能调整已有 Light 或已有 Camera。
+Core responsibilities:
+- Check only whether the content requested by the user's prompt is present, whether requested attributes match, and whether requested spatial relations are correct.
+- This is an incremental scene-editing workflow. The current scene may already contain objects not mentioned in the current prompt. Do not treat those existing objects as errors, and do not ask to delete, hide, or move them, unless the current prompt explicitly asks to delete, replace, or clear the scene.
+- Only flag an unrequested object when it was clearly added by this edit and it interferes with the prompt goal or violates physical common sense. If you cannot tell whether it was newly added, ignore it.
+- Check physical common sense and everyday-use plausibility: support contact, floating, interpenetration, overlap/collision, relative scale, placement orientation, and normal human/object usage.
+- Judge size by relative scale and context, not fixed absolute thresholds. For example, judge whether apples and strawberries look like realistic tabletop objects relative to the table and each other, instead of outputting fixed meter values.
+- If the user asks for a chair beside a table, the chair should be at the table edge with the seat/front facing the table in a usable way. Do not check only distance.
+- When a chair is near a table, check whether it intersects the tabletop, table legs, or other objects. The chair should face the table from a usable side, not be forced in from a side blocked by table legs.
+- If the render is too dark to recognize prompt-related objects, or the camera is too far/cropped to confirm all object relations, you may return done=false, but the fix may only adjust an existing Light or existing Camera.
 
-明确禁止：
-- 不要因为主观构图不够好、材质不够清晰、渲染不够漂亮而返回 done=false，除非用户 prompt 明确要求调整相机、构图、材质或渲染效果。
-- 不要新增光源。场景太暗时只能要求移动或调整已有 Light 的位置/能量，使 prompt 相关物体可辨认。
-- 相机太远、主体太小或物体被裁切导致无法验证 prompt 时，可以要求调整已有 Camera；不要为了“更好看”调整相机。
-- 不要要求添加 prompt 中没有的物体；不要把未要求的物体当作“更自然”的改进。
-- 不要输出“添加补光灯”“占据画面 xx%”“确保材质清晰可见”等美化建议，除非这些就是用户原始目标。
+Hard prohibitions:
+- Do not return done=false because the subjective composition is not good enough, the material is not clear enough, or the render is not pretty enough, unless the user's prompt explicitly asks to adjust camera, composition, material, or render appearance.
+- Do not add new lights. If the scene is too dark, only ask to move or adjust the position/energy of an existing Light so prompt-related objects are recognizable.
+- If the camera is too far, the subject is too small, or objects are cropped so the prompt cannot be verified, you may ask to adjust the existing Camera. Do not adjust the camera just to make the image prettier.
+- Do not ask to add objects that are not in the prompt, and do not treat unrequested objects as improvements that make the scene more natural.
+- Do not ask to delete, hide, or move existing objects not mentioned in the prompt.
+- For example, if the user only says "add a stool" and there is already an apple in the scene, only check whether the stool exists and is placed plausibly; do not label the apple as an unrequested object.
+- Do not output beautification suggestions such as "add a fill light", "occupies xx% of the image", or "ensure the material is clearly visible" unless that is part of the user's original goal.
 
-返回规则：
-- 如果 prompt 所需物体、属性、位置关系、相对比例、支撑/碰撞和生活习惯都基本正确，返回 done=true。
-- 只要缺少 prompt 要求的物体、出现未要求物体、物体关系错误、明显重叠/穿模/悬浮、尺寸比例不符合生活常识、椅子/家具朝向不符合日常使用，就返回 done=false。
-- 当需要调整时，instruction 必须只描述 prompt 一致性、物理常识、生活习惯或可验证性问题的具体修正，例如“把苹果移到草莓右侧一点，避免和草莓重叠，并保持两者都在桌面上”“旋转并移动椅子，使坐垫从未被桌腿阻挡的一侧面向桌子且不穿模”“移动已有 Light 到桌面前上方，不新增光源”“调整已有 Camera，使所有 prompt 相关物体可辨认且不裁切”。
+Return rules:
+- If the prompt-required objects, attributes, spatial relations, relative scale, support/collision behavior, and everyday-use plausibility are basically correct, return done=true.
+- Return done=false when a prompt-required object is missing, object relations are wrong, there is obvious overlap/interpenetration/floating, size proportions violate everyday common sense, or chair/furniture orientation is not usable.
+- When adjustment is needed, instruction must describe only concrete fixes for prompt consistency, physical common sense, everyday-use plausibility, or verifiability.
+- For example: "Move the apple slightly to the right of the strawberry, avoid overlap, and keep both objects on the tabletop";
+  "Rotate and move the chair so the seat faces the table from a side not blocked by table legs and does not intersect the table";
+  "Move the existing Light to the front-above area of the tabletop; do not add a new light";
+  "Adjust the existing Camera so all prompt-related objects are recognizable and not cropped."
 """
 
 
@@ -233,6 +242,58 @@ VISUAL_ONLY_PHRASES = (
     "主体太大",
 )
 
+USER_DELETE_REQUEST_KEYWORDS = (
+    "删除",
+    "移除",
+    "去掉",
+    "去除",
+    "清除",
+    "删掉",
+    "拿掉",
+    "不要",
+    "delete",
+    "remove",
+    "clear",
+)
+
+EXTRA_OBJECT_CLAIM_KEYWORDS = (
+    "未要求",
+    "没要求",
+    "没有要求",
+    "多余",
+    "额外",
+    "不需要",
+    "不应出现",
+    "不该出现",
+    "无关物体",
+    "extra",
+    "unrequested",
+    "unwanted",
+    "not requested",
+)
+
+DELETE_OBJECT_ACTION_KEYWORDS = (
+    "删除",
+    "移除",
+    "去掉",
+    "去除",
+    "清除",
+    "删掉",
+    "拿掉",
+    "隐藏",
+    "delete",
+    "remove",
+    "clear",
+    "hide",
+)
+
+DELETE_ACTION_PATTERN = r"删除|移除|去掉|去除|清除|删掉|拿掉|隐藏"
+CLAUSE_SPLIT_RE = re.compile(
+    rf"(?:[。；;！!\n]+|，且|,?\s+and\s+|且|并且|同时|另外|此外|"
+    rf"[，,]\s*(?={DELETE_ACTION_PATTERN})|并(?={DELETE_ACTION_PATTERN}))",
+    re.IGNORECASE,
+)
+
 
 @dataclass
 class VisualVerifierResult:
@@ -251,7 +312,7 @@ class VisualVerifierAgent:
         if not render_path:
             return VisualVerifierResult(
                 done=True,
-                reason="没有可用 render 结果，跳过 Visual Verifier。",
+                reason="No render result is available, so Visual Verifier was skipped.",
             )
 
         verifier_messages = [
@@ -262,9 +323,9 @@ class VisualVerifierAgent:
                     {
                         "type": "text",
                         "text": (
-                            f"用户原始目标：{user_goal or '未提供'}\n\n"
-                            f"当前场景信息：\n{scene_text or '未获取'}\n\n"
-                            "请检查这张 render 图是否已经满足目标。"
+                            f"Original user goal: {user_goal or 'Not provided'}\n\n"
+                            f"Current scene information:\n{scene_text or 'Not available'}\n\n"
+                            "Check whether this render already satisfies the goal."
                         ),
                     },
                     {"type": "image_url", "image_url": {"url": render_path}},
@@ -280,8 +341,8 @@ class VisualVerifierAgent:
                 max_tokens=512,
             )
         except Exception as exc:
-            logger.error("Visual Verifier 调用失败: %s", exc)
-            return VisualVerifierResult(done=True, reason=f"Visual Verifier 调用失败：{exc}")
+            logger.error("Visual Verifier call failed: %s", exc)
+            return VisualVerifierResult(done=True, reason=f"Visual Verifier call failed: {exc}")
 
         content = (response or {}).get("content") or ""
         verdict = self._extract_json_object(content)
@@ -290,7 +351,7 @@ class VisualVerifierAgent:
             done = any(key in lowered for key in ("done", "ok", "acceptable", "可接受", "差不多", "完成"))
             return VisualVerifierResult(
                 done=done,
-                reason=content.strip() or "Verifier 未返回结构化结果。",
+                reason=content.strip() or "Verifier did not return a structured result.",
                 instruction="" if done else content.strip(),
             )
 
@@ -339,11 +400,62 @@ class VisualVerifierAgent:
         return any(keyword.lower() in lowered for keyword in keywords)
 
     @classmethod
-    def _apply_scope_guard(cls, user_goal: str, result: VisualVerifierResult) -> VisualVerifierResult:
+    def _strip_unrequested_object_clauses(cls, text: str) -> str:
+        if not text:
+            return text
+
+        clauses = [clause.strip(" ，,。；;！!\n") for clause in CLAUSE_SPLIT_RE.split(text)]
+        kept = [
+            clause
+            for clause in clauses
+            if clause
+            and not (
+                cls._contains_any(clause, EXTRA_OBJECT_CLAIM_KEYWORDS)
+                or (
+                    cls._contains_any(clause, DELETE_OBJECT_ACTION_KEYWORDS)
+                    and "不要" not in clause
+                    and not cls._contains_any(clause, OBJECTIVE_VERIFIER_KEYWORDS)
+                )
+            )
+        ]
+        return "；".join(kept).strip()
+
+    @classmethod
+    def _apply_scope_guard(
+        cls,
+        user_goal: str,
+        result: VisualVerifierResult,
+    ) -> VisualVerifierResult:
         if result.done or not result.instruction:
             return result
 
-        user_allows_visual_edits = cls._contains_any(user_goal or "", PROMPT_ALLOWED_VISUAL_KEYWORDS)
+        user_requests_delete = cls._contains_any(user_goal or "", USER_DELETE_REQUEST_KEYWORDS)
+        if not user_requests_delete:
+            sanitized_reason = cls._strip_unrequested_object_clauses(result.reason or "")
+            sanitized_instruction = cls._strip_unrequested_object_clauses(result.instruction or "")
+            if (
+                sanitized_reason != (result.reason or "")
+                or sanitized_instruction != (result.instruction or "")
+            ):
+                if not sanitized_instruction:
+                    return VisualVerifierResult(
+                        done=True,
+                        reason=(
+                            f"Ignored Visual Verifier advice that asks to handle existing objects not mentioned in the prompt: "
+                            f"{result.reason or result.instruction}"
+                        ),
+                        instruction="",
+                    )
+                result = VisualVerifierResult(
+                    done=False,
+                    reason=sanitized_reason or "Kept only adjustment advice related to the current prompt.",
+                    instruction=sanitized_instruction,
+                )
+
+        user_allows_visual_edits = cls._contains_any(
+            user_goal or "",
+            PROMPT_ALLOWED_VISUAL_KEYWORDS,
+        )
         if user_allows_visual_edits:
             return result
 
@@ -353,8 +465,8 @@ class VisualVerifierAgent:
         if cls._contains_any(combined, ADD_LIGHT_KEYWORDS):
             return VisualVerifierResult(
                 done=False,
-                reason=reason or "渲染太暗，但不能新增 prompt 中没有的光源。",
-                instruction="不要新增光源；只移动或调整场景中已有的 Light，使 prompt 相关物体可辨认。",
+                reason=reason or "The render is too dark, but lights not requested by the prompt must not be added.",
+                instruction="Do not add a new light; only move or adjust an existing Light in the scene so prompt-related objects are recognizable.",
             )
 
         has_visibility_repair = cls._contains_any(combined, VISIBILITY_REPAIR_KEYWORDS)
@@ -363,13 +475,18 @@ class VisualVerifierAgent:
 
         has_out_of_scope_terms = cls._contains_any(instruction, OUT_OF_SCOPE_VERIFIER_KEYWORDS)
         has_objective_terms = cls._contains_any(instruction, OBJECTIVE_VERIFIER_KEYWORDS)
-        has_strong_objective_terms = cls._contains_any(instruction, STRONG_OBJECTIVE_VERIFIER_KEYWORDS)
+        has_strong_objective_terms = cls._contains_any(
+            instruction,
+            STRONG_OBJECTIVE_VERIFIER_KEYWORDS,
+        )
         looks_visual_only = cls._contains_any(instruction, VISUAL_ONLY_PHRASES)
-        if has_out_of_scope_terms and (not has_objective_terms or (looks_visual_only and not has_strong_objective_terms)):
-            reason = result.reason or "Verifier 只提出了画面美化建议。"
+        if has_out_of_scope_terms and (
+            not has_objective_terms or (looks_visual_only and not has_strong_objective_terms)
+        ):
+            reason = result.reason or "The verifier only suggested visual beautification."
             return VisualVerifierResult(
                 done=True,
-                reason=f"忽略超出用户 prompt 的 Visual Verifier 建议：{reason}",
+                reason=f"Ignored Visual Verifier advice outside the user's prompt: {reason}",
                 instruction="",
             )
         return result

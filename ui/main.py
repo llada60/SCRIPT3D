@@ -422,7 +422,7 @@ def create_ui():
     ) as app:
         gr.Markdown("## GOSIM Infinigen Blender Agent", elem_classes=["app-title"])
         gr.Markdown(
-            "使用 LLM Function Call 操作 Blender / Infinigen 场景",
+            "Control Blender / Infinigen scenes with LLM function calls",
             elem_classes=["app-subtitle"],
         )
 

@@ -66,7 +66,7 @@ def _set_blender_agent_status(agent, state: str, message: str):
         try:
             agent.blender_client.set_agent_status(state=state, message=message)
         except Exception as exc:
-            logger.debug("同步 Blender Agent 状态失败: %s", exc)
+            logger.debug("Failed to sync Blender Agent status: %s", exc)
 
 
 def _format_user_chat_content(input_value):
@@ -87,9 +87,9 @@ def _append_completion_notice(chatbot_value):
         return
     message = chatbot_value[-1]
     content = message.get("content")
-    notice = "已全部完成"
+    notice = "All done."
     if isinstance(content, str):
-        if notice not in content:
+        if "all done" not in content.lower():
             message["content"] = f"{content.rstrip()}\n\n{notice}" if content.strip() else notice
     elif content is None:
         message["content"] = notice
@@ -114,7 +114,7 @@ def _format_tool_result_details(function_result: Dict[str, Any]) -> str:
     json_text = json.dumps(function_result, ensure_ascii=False, indent=2)
     return (
         '\n\n<details class="tool-result-details">'
-        "<summary>查看详细</summary>"
+        "<summary>View details</summary>"
         f"<pre><code>{html.escape(json_text)}</code></pre>"
         "</details>"
     )
@@ -125,7 +125,7 @@ def submit(input_value, chatbot_value):
     # 获取当前Agent
     agent = get_agent()
     if agent is None:
-        logger.error("未找到可用的Agent实例")
+        logger.error("No available Agent instance found")
         chatbot_value.append(
             {
                 "role": "user",
@@ -134,7 +134,7 @@ def submit(input_value, chatbot_value):
         )
         chatbot_value.append({
             "role": "assistant", 
-            "content": "系统错误：未找到可用的Agent实例，请确认已正确配置Blender和LLM。",
+            "content": "System error: no available Agent instance was found. Please check that Blender and the LLM are configured correctly.",
             "status": "done"
         })
         yield gr.update(value=None), gr.update(value=chatbot_value)
@@ -197,14 +197,14 @@ def submit(input_value, chatbot_value):
                 
                 # 如果有函数调用，添加函数调用信息（仅当是新函数时）
                 if function_call:
-                    function_name = function_call.get("name", "未知函数")
+                    function_name = function_call.get("name", "Unknown tool")
                     # 检查是否是新的函数调用
                     if function_name != current_function:
                         current_function = function_name
                         if "content" not in chatbot_value[-1] or chatbot_value[-1]["content"] is None:
-                            chatbot_value[-1]["content"] = f"正在执行：{function_name}..."
+                            chatbot_value[-1]["content"] = f"Running: {function_name}..."
                         else:
-                            chatbot_value[-1]["content"] += f"\n正在执行：{function_name}..."
+                            chatbot_value[-1]["content"] += f"\nRunning: {function_name}..."
                 
                 # 如果有函数调用结果，添加函数调用结果到当前消息
                 if function_result:
@@ -221,7 +221,7 @@ def submit(input_value, chatbot_value):
                 if content_chunk or function_call or function_result:
                     yield gr.update(loading=False), gr.update(value=chatbot_value)
                 else:
-                    print("该轮中LLM没有内容输出")
+                    print("The LLM produced no output in this round")
             
             # 完成一轮对话，更新最后一条消息的状态
             chatbot_value[-1]["loading"] = False
@@ -230,9 +230,9 @@ def submit(input_value, chatbot_value):
             # 检查是否需要结束自动生成循环
             response_text = response_content.strip()
             should_stop = (
-                response_text.startswith("全部完成") or 
-                response_text.endswith("全部完成") or
-                "等待用户指令" in response_text or
+                response_text.lower().startswith("all done") or 
+                response_text.lower().endswith("all done.") or
+                "waiting for user instruction" in response_text.lower() or
                 blocked_by_guard or
                 current_rounds >= max_auto_rounds
             )
@@ -249,27 +249,27 @@ def submit(input_value, chatbot_value):
                 # 下一轮传入空字符串作为用户消息
                 if not response_content:
                     user_message = (
-                        f"继续完成原始用户指令：{original_user_text}\n"
-                        "严格限制：只执行原始指令明确要求的动作；"
-                        "不要添加、删除、移动或修改任何原始指令未要求的物体。"
-                        "如果原始指令已经完成，只回复“全部完成”。"
+                        f"Continue completing the original user instruction: {original_user_text}\n"
+                        "Strict limits: only perform actions explicitly requested in the original instruction. "
+                        "Do not add, delete, move, or modify anything not requested by the original instruction. "
+                        "If the original instruction is already complete, reply only: All done."
                     )
                 else:
                     user_message = (
-                        f"继续完成原始用户指令：{original_user_text}\n"
-                        "严格限制：不要扩展场景，不要添加未要求的物体。"
-                        "如果原始指令已经完成，只回复“全部完成”。"
+                        f"Continue completing the original user instruction: {original_user_text}\n"
+                        "Strict limits: do not expand the scene and do not add unrequested objects. "
+                        "If the original instruction is already complete, reply only: All done."
                     )
 
         _append_completion_notice(chatbot_value)
         
     except Exception as e:
-        logger.error(f"聊天过程中发生错误: {str(e)}")
+        logger.error(f"Error during chat: {str(e)}")
         chatbot_value[-1]["loading"] = False
-        chatbot_value[-1]["content"] = f"处理消息时发生错误: {str(e)}"
+        chatbot_value[-1]["content"] = f"Error while processing the message: {str(e)}"
         chatbot_value[-1]["status"] = "done"
     
-    _set_blender_agent_status(agent, "idle", "Agent 运行已结束")
+    _set_blender_agent_status(agent, "idle", "Agent run finished")
     # 更新UI，结束loading状态
     yield gr.update(loading=False), gr.update(value=chatbot_value)
 
@@ -291,7 +291,7 @@ def _refresh_right_view(auto_update_info=True, auto_render=True):
         )
         image_update = image_path if image_path else gr.update()
         if render_error and auto_update_info:
-            scene_update = f"{scene_update}\n\n渲染状态: {render_error}"
+            scene_update = f"{scene_update}\n\nRender status: {render_error}"
 
     return scene_update, image_update
 
@@ -335,7 +335,7 @@ def submit_with_view(
     for iteration in range(1, max_iterations + 1):
         chatbot_value.append({
             "role": "assistant",
-            "content": f"Visual Verifier 正在检查第 {iteration}/{max_iterations} 次渲染...",
+            "content": f"Visual Verifier is checking render {iteration}/{max_iterations}...",
             "loading": True,
             "status": "pending",
         })
@@ -343,38 +343,38 @@ def submit_with_view(
 
         visual_verifier = getattr(agent, "visual_verifier", None)
         if visual_verifier is None:
-            chatbot_value[-1]["content"] = "Visual Verifier 未初始化，请重新初始化 Agent。"
+            chatbot_value[-1]["content"] = "Visual Verifier is not initialized. Please initialize the Agent again."
             chatbot_value[-1]["loading"] = False
             chatbot_value[-1]["status"] = "done"
             yield gr.update(loading=False), gr.update(value=chatbot_value), gr.update(), gr.update()
             break
 
         verdict = visual_verifier.verify(user_goal, current_image_path, current_scene_text)
-        reason = verdict.reason or "未提供原因"
+        reason = verdict.reason or "No reason provided."
         instruction = verdict.instruction or ""
         if verdict.done:
-            chatbot_value[-1]["content"] = f"Visual Verifier：结果已可接受。原因：{reason}"
+            chatbot_value[-1]["content"] = f"Visual Verifier: the result is acceptable. Reason: {reason}"
             chatbot_value[-1]["loading"] = False
             chatbot_value[-1]["status"] = "done"
             yield gr.update(loading=False), gr.update(value=chatbot_value), gr.update(), gr.update()
             break
 
         chatbot_value[-1]["content"] = (
-            f"Visual Verifier：需要继续调整。原因：{reason}\n\n"
-            f"给 code generator 的指令：{instruction}"
+            f"Visual Verifier: more adjustment is needed. Reason: {reason}\n\n"
+            f"Instruction for the code generator: {instruction}"
         )
         chatbot_value[-1]["loading"] = False
         chatbot_value[-1]["status"] = "done"
         yield gr.update(loading=False), gr.update(value=chatbot_value), gr.update(), gr.update()
 
         generator_instruction = (
-            "Visual verifier 根据最新 render 提出如下调整。"
-            "请只使用 Blender 工具函数修正 prompt 一致性、物理常识或生活习惯问题；"
-            "如果渲染太暗或相机太远导致无法验证，可以移动/调整已有 Light 或已有 Camera，但不要新增光源或未要求物体；"
-            "不要为了主观美化去优化光照、相机、构图、材质或渲染效果；"
-            "必须继续遵守用户原始目标，不要新增未被用户原始目标或 verifier 指令明确要求的物体；"
-            "完成后返回全部完成。\n"
-            f"用户原始目标：{user_goal}\n"
+            "The visual verifier proposed the following adjustment based on the latest render. "
+            "Use only Blender tool calls to fix prompt consistency, basic physics, or practical plausibility. "
+            "If the render is too dark or the camera is too far to verify, you may move/adjust existing Light or Camera objects, but do not add new lights or unrequested objects. "
+            "Do not optimize lighting, camera, composition, materials, or render style for subjective aesthetics. "
+            "Keep following the user's original goal, and do not add objects unless explicitly required by the original goal or verifier instruction. "
+            "When finished, reply: All done.\n"
+            f"Original user goal: {user_goal}\n"
             f"{instruction}"
         )
         for input_update, chat_update in submit({"text": generator_instruction, "files": []}, chatbot_value):
@@ -398,7 +398,7 @@ def cancel(chatbot_value):
         try:
             agent.blender_client.cancel_agent_run()
         except Exception as exc:
-            logger.debug("通知 Blender 停止 Agent 运行失败: %s", exc)
+            logger.debug("Failed to notify Blender to stop the Agent run: %s", exc)
     chatbot_value[-1]["loading"] = False
     chatbot_value[-1]["footer"] = "canceled"
     chatbot_value[-1]["status"] = "done"
@@ -490,14 +490,14 @@ def retry(chatbot_value):
                 
             # 如果有函数调用，添加函数调用信息（仅当是新函数时）
             if function_call:
-                function_name = function_call.get("name", "未知函数")
+                function_name = function_call.get("name", "Unknown tool")
                 # 检查是否是新的函数调用
                 if function_name != current_function:
                     current_function = function_name
                     if "content" not in chatbot_value[-1] or chatbot_value[-1]["content"] is None:
-                        chatbot_value[-1]["content"] = f"正在执行：{function_name}..."
+                        chatbot_value[-1]["content"] = f"Running: {function_name}..."
                     else:
-                        chatbot_value[-1]["content"] += f"\n正在执行：{function_name}..."
+                        chatbot_value[-1]["content"] += f"\nRunning: {function_name}..."
                     message_changed = True
             
             # 如果有函数调用结果，添加函数调用结果到当前消息
@@ -520,11 +520,11 @@ def retry(chatbot_value):
         _append_completion_notice(chatbot_value)
         
     except Exception as e:
-        logger.error(f"重试过程中发生错误: {str(e)}")
+        logger.error(f"Error during retry: {str(e)}")
         chatbot_value[-1]["loading"] = False
-        chatbot_value[-1]["content"] = f"处理重试时发生错误: {str(e)}"
+        chatbot_value[-1]["content"] = f"Error while retrying: {str(e)}"
         chatbot_value[-1]["status"] = "done"
     
-    _set_blender_agent_status(agent, "idle", "Agent 运行已结束")
+    _set_blender_agent_status(agent, "idle", "Agent run finished")
     # 更新UI，结束loading状态
     yield gr.update(loading=False), gr.update(value=chatbot_value)

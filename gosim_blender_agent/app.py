@@ -15,7 +15,7 @@ def main() -> None:
     try:
         import gradio as gr
     except ImportError as exc:
-        raise SystemExit("请先安装 UI 依赖：pip install -e '.[ui]'") from exc
+        raise SystemExit("Please install UI dependencies first: pip install -e '.[ui]'") from exc
 
     settings = get_settings()
     client = BlenderClient(settings)
@@ -26,9 +26,9 @@ def main() -> None:
             result = agent.handle(message)
             assistant_content = result.text.rstrip()
             if assistant_content:
-                assistant_content = f"{assistant_content}\n\n已全部完成"
+                assistant_content = f"{assistant_content}\n\nAll done."
             else:
-                assistant_content = "已全部完成"
+                assistant_content = "All done."
             history = history + [
                 {"role": "user", "content": message},
                 {"role": "assistant", "content": assistant_content},
@@ -38,7 +38,7 @@ def main() -> None:
         except Exception as exc:  # UI should show Blender-side errors directly.
             history = history + [
                 {"role": "user", "content": message},
-                {"role": "assistant", "content": f"执行失败：{exc}"},
+                {"role": "assistant", "content": f"Execution failed: {exc}"},
             ]
             return history, None, repr(exc)
 
@@ -56,16 +56,16 @@ def main() -> None:
             with gr.Column(scale=2):
                 chatbot = gr.Chatbot(type="messages", height=520)
                 textbox = gr.Textbox(
-                    label="自然语言指令",
-                    placeholder="例如：把台灯放到桌子上 / 添加一张书桌 / 把床往右移动 0.3 米 / 渲染预览",
+                    label="Natural-language Instruction",
+                    placeholder="Example: put the desk lamp on the table / add a desk / move the bed right by 0.3 m / render preview",
                 )
                 with gr.Row():
-                    send = gr.Button("发送", variant="primary")
-                    index_btn = gr.Button("重建索引")
-                    render_btn = gr.Button("渲染预览")
+                    send = gr.Button("Send", variant="primary")
+                    index_btn = gr.Button("Rebuild Index")
+                    render_btn = gr.Button("Render Preview")
             with gr.Column(scale=1):
-                image = gr.Image(label="Blender 预览", type="filepath")
-                raw = gr.Code(label="工具调用结果", language="json")
+                image = gr.Image(label="Blender Preview", type="filepath")
+                raw = gr.Code(label="Tool Call Result", language="json")
 
         send.click(chat, inputs=[textbox, chatbot], outputs=[chatbot, image, raw])
         textbox.submit(chat, inputs=[textbox, chatbot], outputs=[chatbot, image, raw])
