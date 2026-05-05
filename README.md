@@ -1,41 +1,60 @@
-# GOSIM 2026 Paris: Script-Controlled Infinigen Asset Agent
+# Script-Controlled Infinigen Asset Agent
 
-这个项目的核心不是简单的 text-to-3D，而是一个 **可控 3D 资产生成与编辑 Agent 系统**：用户用自然语言描述目标，Agent 将需求落到受控的 Python generation script，再通过 Blender + Infinigen 生成真实 3D asset，并支持后续 editing、替换、追踪和场景级验证。
+This project is a controllable 3D asset generation and editing agent for Blender. It is not a one-shot text-to-3D demo. The core workflow turns a natural-language request into a structured tool call, records the result as a Python generation script, generates the asset through Blender + [Infinigen](https://github.com/princeton-vl/infinigen), and keeps enough metadata to support later replacement-style editing.
 
-参考基础是 [Infinigen](https://github.com/princeton-vl/infinigen)：我们不让模型随意“想象”一个黑盒模型结果，而是把自然语言映射到 Infinigen 的程序化 asset factory，用 Python script 明确记录 factory、seed、scale、位置、材质和 edit prompt。这样生成过程可复现、可审计、可继续编辑。
+The key design choice is that Infinigen is the reference generation system. Assets are created from Infinigen procedural factories instead of opaque mesh outputs, so the system can track factory path, seed, scale, placement, material, source prompt, and edit prompt.
 
-## 核心卖点
+## Table of Contents
 
-- **Script-controlled 3D generation**：每个 asset 都由 Python script 驱动生成，底层调用 Infinigen factory，而不是一次性黑盒模型输出。
-- **Reference is Infinigen**：家具、灯具、植物、水果等资产来自 Infinigen 的程序化资产系统，天然适合室内场景、仿真数据和 embodied AI 环境。
-- **可控性强**：生成参数包括 factory、seed、scale、location、material color，所有关键状态都会写入 asset metadata 和 `generation_scripts/`。
-- **Editing 是一等能力**：`\editing ...` 会解析已有资产，读取原 generation record，重新生成 replacement asset，并保持旧资产的位置和尺寸对齐。
-- **Agent 分工清晰**：Code Generator 负责工具调用，Visual Verifier 负责看图检查，Blender Addon Agent 负责真正执行，离线 Rule Planner/CLI 负责无模型 fallback。
-- **安全执行边界**：LLM 不执行任意 `bpy` 代码，只能调用白名单工具；Blender 插件在主线程里验证目标、执行变换、更新索引。
-- **场景级闭环**：生成不是终点。系统会自动更新语义索引、执行物理规则、渲染预览，并可用视觉 verifier 继续修正。
+- [Highlights](#highlights)
+- [Why This Exists](#why-this-exists)
+- [Agent System](#agent-system)
+- [Script-Controlled Generation](#script-controlled-generation)
+- [Generation Prompt Examples](#generation-prompt-examples)
+- [Category](#category)
+- [Generation Scripts and Metadata](#generation-scripts-and-metadata)
+- [Editing Workflow](#editing-workflow)
+- [Editing Prompt Format](#editing-prompt-format)
+- [Scene Index](#scene-index)
+- [Tool Surface](#tool-surface)
+- [Quick Start](#quick-start)
+- [CLI](#cli)
+- [TODO](#todo)
 
-## 我们解决的问题
+## Highlights
 
-普通 text-to-3D demo 通常只能做：
+- **Script-controlled 3D generation**: every generated asset is backed by a Python script and an Infinigen factory path.
+- **Infinigen as reference**: furniture, appliances, lamps, plants, rugs, and fruits come from Infinigen procedural asset factories.
+- **Controllable asset records**: factory, seed, scale, location, material, prompt, and edit history are written to metadata and `generation_scripts/`.
+- **Editing as a first-class workflow**: `\editing ...` resolves an existing generated asset, respawns a replacement from the original factory record, applies the edit, and aligns it back to the old asset.
+- **Multi-agent architecture**: a Code Generator Agent plans tool calls, a Blender Addon Agent executes them, a Visual Verifier Agent checks rendered results, and a Rule Planner/CLI Agent provides a no-model fallback.
+- **Constrained execution**: the LLM does not run arbitrary `bpy` code. It can only call predefined tools.
+- **Scene-level loop**: every operation can update the scene index, run placement/physics rules, render a preview, and feed the result back into verification.
+
+## Why This Exists
+
+Most text-to-3D demos follow this shape:
 
 ```text
 prompt -> one generated mesh
 ```
 
-这个项目做的是：
+That makes editing hard: the output is often opaque, hard to reproduce, and difficult to modify in a targeted way.
+
+This project uses a script-controlled workflow:
 
 ```text
-prompt -> agent plan -> Python generation script -> Infinigen factory -> Blender asset
-       -> scene index -> editing/regeneration -> render verification
+generation/editing prompt -> agent plan -> Python script -> Blender asset
+                           -> scene index JSON -> render verification
 ```
 
-这样带来三个关键优势：
+That gives the project three useful properties:
 
-1. **生成可复现**：同一个 factory + seed + script 可以重新得到同类资产。
-2. **编辑可控**：不是在 mesh 上盲改，而是保留生成源信息后重新生成/替换。
-3. **场景可管理**：每个 asset 都进入语义索引，后续可以按类别、自然语言、空间关系继续操作。
+1. **Reproducible generation**: the same factory, seed, and script can recreate a comparable asset.
+2. **Controlled editing**: edits operate through stored generation records instead of blind mesh manipulation.
+3. **Scene management**: generated assets are indexed by category, object id, dimensions, materials, and relations.
 
-## Agent 体系
+## Agent System
 
 ```mermaid
 flowchart LR
@@ -45,9 +64,8 @@ flowchart LR
     ToolCall --> BlenderClient["JSON socket client"]
     BlenderClient --> AddonAgent["Blender Addon Agent"]
     AddonAgent --> Scripts["Python generation scripts"]
-    AddonAgent --> Infinigen["Infinigen factories"]
-    AddonAgent --> SceneIndex["Semantic scene index"]
-    AddonAgent --> Physics["Physics / placement rules"]
+    AddonAgent --> SceneIndex["Scene index JSON"]
+    AddonAgent --> Physics["Placement / physics rules"]
     AddonAgent --> Render["Blender render"]
     Render --> VisualAgent["Visual Verifier Agent"]
     VisualAgent --> CodeAgent
@@ -55,27 +73,24 @@ flowchart LR
 
 ### Code Generator Agent
 
-位置：`src/agent/agent.py`
+Location: `src/agent/agent.py`
 
-职责：
+Role: converts user instructions into structured tool calls.
 
-- 读取用户自然语言指令。
-- 选择白名单工具，例如 `add_infinigen_asset`、`edit_generated_asset`、`place_on`、`render_scene`。
-- 遵守物理和行为规则：不主动添加 prompt 没要求的物体，不生成任意 Python/bpy 代码。
-- 在 UI 中以 streaming function call 的方式推进多轮工具执行。
+- Reads natural-language generation and editing prompts.
+- Chooses whitelisted tools such as `add_infinigen_asset`, `edit_generated_asset`, `place_on`, and `render_scene`.
+- Follows behavior constraints: do not add objects that were not requested, and do not generate arbitrary Blender Python code.
+- Streams tool-call progress through the UI.
 
 ### Visual Verifier Agent
 
-位置：`src/agent/visual_verifier.py`
+Location: `src/agent/visual_verifier.py`
 
-职责：
+Role: checks rendered results and sends targeted feedback back to the Code Generator Agent.
 
-- 读取渲染图、原始 user goal 和当前 scene info。
-- 判断生成结果是否满足 prompt、空间关系和基本物理常识。
-- 如果失败，输出下一步 editing instruction 给 Code Generator。
-- 带 scope guard：不会因为主观美化要求添加灯光、删除无关已有物体或做 prompt 外操作。
-
-返回格式：
+- Reads the rendered image, original user goal, and current scene information.
+- Verifies prompt satisfaction, spatial relations, basic physics, and practical plausibility.
+- Returns a structured verdict:
 
 ```json
 {
@@ -87,73 +102,79 @@ flowchart LR
 
 ### Blender Addon Agent
 
-位置：`blender_addon/gosim_infinigen_agent_addon.py`
+Location: `blender_addon/infinigen_agent_addon.py`
 
-职责：
+Role: performs the actual Blender-side work.
 
-- 在 Blender 内启动 socket server：`127.0.0.1:9876`。
-- 接收结构化命令并在 Blender 主线程执行。
-- 调用 Infinigen factory 生成资产。
-- 写入 generation metadata 和 Python script。
-- 维护 `gosim_scene_index.json`。
-- 执行放置、材质、缩放、旋转、删除、相机、灯光、渲染等实际操作。
+- Starts the Blender socket server.
+- Receives structured commands and executes them on the Blender main thread.
+- Calls the vendored Infinigen package and its asset factories.
+- Writes generation metadata and Python scripts under `generation_scripts/`.
+- Maintains `scene_index.json`.
+- Performs placement, material assignment, scaling, rotation, deletion, camera adjustment, light adjustment, and rendering.
 
 ### Rule Planner / CLI Agent
 
-位置：`gosim_blender_agent/planner.py`、`gosim_blender_agent/agent.py`
+Location: `infinigen_blender_agent/planner.py`, `infinigen_blender_agent/agent.py`
 
-职责：
+Role: provides a deterministic fallback and command-line demo path.
 
-- 在没有 LLM 的情况下提供中英文规则解析 fallback。
-- 支持 CLI demo，例如 `chat "添加一张书桌"`。
-- 使用同一套 socket protocol 和 tool schema，方便快速验证 Blender 端能力。
+- Parses a small set of English and Chinese commands without requiring an LLM.
+- Uses the same socket protocol and tool schema as the UI agent.
+- Makes it easier to test Blender-side capabilities quickly.
 
 ### Camera Agent
 
-实现位置：`blender_addon/gosim_infinigen_agent_addon.py`
+Location: `blender_addon/infinigen_agent_addon.py`
 
-职责：
+Role: adjusts camera framing from rendered feedback.
 
-- 在正式 render 前检查主体是否在镜头内、是否太小或太大。
-- 渲染透明背景 mask，读取 alpha pixel bounding box。
-- 根据像素中心偏移和 fill ratio 移动/拉近相机。
-- 输出最终 render 和每轮调整数据。
+- Checks whether prompt-relevant subjects are visible and reasonably sized before rendering.
+- Renders a transparent mask and reads the alpha-pixel bounding box.
+- Recenters or dollies the camera based on pixel offset and fill ratio.
+- Returns final render data plus per-step adjustment metadata.
 
-## Script-Controlled Asset Generation
+## Script-Controlled Generation
 
-生成入口是：
+The main generation tool is:
 
 ```text
 add_infinigen_asset
 ```
 
-它会执行以下流程：
+Execution flow:
 
-1. 解析自然语言类别，例如 `desk`、`书桌`、`apple`、`菠萝`。
-2. 映射到 Infinigen factory，例如 `SimpleDeskFactory`、`FruitFactoryApple`。
-3. 在 Blender 内实例化 factory，并调用 `spawn_asset` 或 `create_asset`。
-4. 标记 `gosim_asset_id`、`gosim_category`、`gosim_factory` 等 metadata。
-5. 应用 scale、location、material color。
-6. 运行物理规则，避免悬浮和极端比例。
-7. 写入可复现 Python generation script。
-8. 重建 scene index。
+1. Parse the requested category, such as `desk`, `pillow`, `microwave`, or `apple`.
+2. Resolve it to an Infinigen factory, such as `SimpleDeskFactory` or `FruitFactoryApple`.
+3. Instantiate the factory in Blender and call `spawn_asset` or `create_asset`.
+4. Tag Blender objects with `agent_asset_id`, `agent_category`, and `agent_factory`.
+5. Apply scale, location, and material settings.
+6. Run placement/physics rules to reduce floating objects and extreme proportions.
+7. Write a reproducible Python generation script.
+8. Rebuild the scene index.
 
-示例映射：
+### Generation Prompt Examples
+
+Generation prompts create new assets. Recommended forms:
 
 ```text
-desk / 书桌          -> infinigen.assets.objects.shelves.SimpleDeskFactory
-bed / 床             -> infinigen.assets.objects.seating.BedFactory
-desk_lamp / 台灯     -> infinigen.assets.objects.lamp.DeskLampFactory
-chair / 椅子         -> infinigen.assets.objects.seating.chairs.ChairFactory
-microwave            -> infinigen.assets.objects.appliances.MicrowaveFactory
-tv                   -> infinigen.assets.objects.appliances.TVFactory
-apple / 苹果         -> infinigen.assets.objects.fruits.FruitFactoryApple
-pineapple / 菠萝     -> infinigen.assets.objects.fruits.FruitFactoryPineapple
+add a <category>
+add a <category> on/near <target>
+add a <category> with <material or color>
 ```
 
-## 当前可生成 Asset
+Use category names from the [Category](#category) section when possible. If the prompt needs placement, state the support/reference object directly. Fruits do not need explicit scale; the executor applies small tabletop-object defaults.
 
-当前 `add_infinigen_asset` 支持以下程序化 Infinigen object assets。推荐 prompt 使用英文类别名；部分历史类别仍保留中文 alias。
+Example prompts:
+
+```text
+add a marble side table
+add a desk lamp on the desk
+```
+
+## Category
+
+`add_infinigen_asset` supports the following Infinigen-backed asset categories.
 
 ### Furniture and Interior Objects
 
@@ -165,31 +186,10 @@ chair, bar_chair, office_chair, sofa, armchair,
 cabinet, bookcase, rug, plant
 ```
 
-示例 prompt：
-
-```text
-add a bed
-add a pillow
-add a coffee table
-add a bar stool
-add an armchair
-add a floor lamp
-```
-
 ### Appliances
 
 ```text
 beverage_fridge, dishwasher, microwave, oven, tv, monitor
-```
-
-示例 prompt：
-
-```text
-add a beverage fridge
-add a dishwasher
-add a microwave oven
-add a tv
-add a computer monitor
 ```
 
 ### Fruits
@@ -199,20 +199,50 @@ apple, blackberry, green_coconut, hairy_coconut, durian,
 pineapple, starfruit, strawberry, compositional_fruit
 ```
 
-示例 prompt：
+Fruit categories use separate default scales and maximum dimensions to avoid furniture-sized apples or strawberries.
 
-```text
-add an apple
-add a pineapple
-add a strawberry
-add a green coconut
-```
+### Category Reference
 
-水果类资产有单独默认 scale 和最大尺寸限制，避免 LLM 把苹果、草莓生成成家具大小。
+| Category | Common aliases | Infinigen reference factory |
+| --- | --- | --- |
+| `bed` | `床`, `卧床`, `双人床` | `infinigen.assets.objects.seating.BedFactory` |
+| `bed_frame` | `bed frame`, `bedframe` | `infinigen.assets.objects.seating.BedFrameFactory` |
+| `mattress` | `mattress` | `infinigen.assets.objects.seating.MattressFactory` |
+| `pillow` | `pillow`, `cushion` | `infinigen.assets.objects.seating.PillowFactory` |
+| `desk` | `书桌`, `桌子`, `工作桌`, `办公桌` | `infinigen.assets.objects.shelves.SimpleDeskFactory` |
+| `table` | `餐桌`, `大桌子` | `infinigen.assets.objects.tables.TableDiningFactory` |
+| `side_table` | `side table`, `nightstand`, `床头柜` | `infinigen.assets.objects.tables.SideTableFactory` |
+| `coffee_table` | `coffee table`, `茶几` | `infinigen.assets.objects.tables.CoffeeTableFactory` |
+| `desk_lamp` | `desk lamp`, `lamp`, `台灯` | `infinigen.assets.objects.lamp.DeskLampFactory` |
+| `floor_lamp` | `floor lamp`, `落地灯` | `infinigen.assets.objects.lamp.FloorLampFactory` |
+| `chair` | `椅子`, `座椅` | `infinigen.assets.objects.seating.chairs.ChairFactory` |
+| `bar_chair` | `bar chair`, `bar stool`, `stool` | `infinigen.assets.objects.seating.chairs.BarChairFactory` |
+| `office_chair` | `office chair`, `办公椅` | `infinigen.assets.objects.seating.chairs.OfficeChairFactory` |
+| `sofa` | `沙发` | `infinigen.assets.objects.seating.SofaFactory` |
+| `armchair` | `arm chair`, `lounge chair` | `infinigen.assets.objects.seating.ArmChairFactory` |
+| `beverage_fridge` | `beverage fridge`, `mini fridge`, `fridge` | `infinigen.assets.objects.appliances.BeverageFridgeFactory` |
+| `dishwasher` | `dishwasher` | `infinigen.assets.objects.appliances.DishwasherFactory` |
+| `microwave` | `microwave oven` | `infinigen.assets.objects.appliances.MicrowaveFactory` |
+| `oven` | `oven` | `infinigen.assets.objects.appliances.OvenFactory` |
+| `tv` | `television` | `infinigen.assets.objects.appliances.TVFactory` |
+| `monitor` | `computer monitor`, `display` | `infinigen.assets.objects.appliances.MonitorFactory` |
+| `cabinet` | `柜子`, `储物柜` | `infinigen.assets.objects.shelves.SingleCabinetFactory` |
+| `bookcase` | `bookshelf`, `书架` | `infinigen.assets.objects.shelves.SimpleBookcaseFactory` |
+| `rug` | `地毯` | `infinigen.assets.objects.elements.RugFactory` |
+| `plant` | `盆栽`, `植物` | `infinigen.assets.objects.tableware.PlantContainerFactory` |
+| `apple` | `苹果`, `青苹果`, `绿苹果` | `infinigen.assets.objects.fruits.FruitFactoryApple` |
+| `blackberry` | `黑莓` | `infinigen.assets.objects.fruits.FruitFactoryBlackberry` |
+| `green_coconut` | `green coconut`, `青椰子`, `椰青` | `infinigen.assets.objects.fruits.FruitFactoryCoconutgreen` |
+| `hairy_coconut` | `hairy coconut`, `coconut`, `椰子` | `infinigen.assets.objects.fruits.FruitFactoryCoconuthairy` |
+| `durian` | `榴莲` | `infinigen.assets.objects.fruits.FruitFactoryDurian` |
+| `pineapple` | `菠萝`, `凤梨` | `infinigen.assets.objects.fruits.FruitFactoryPineapple` |
+| `starfruit` | `star fruit`, `杨桃` | `infinigen.assets.objects.fruits.FruitFactoryStarfruit` |
+| `strawberry` | `草莓` | `infinigen.assets.objects.fruits.FruitFactoryStrawberry` |
+| `compositional_fruit` | `mixed fruit`, `组合水果` | `infinigen.assets.objects.fruits.FruitFactoryCompositional` |
 
 ### Prompt Materials
 
-`set_material` 和 `\editing ...` 支持把已有 asset 改成 Infinigen procedural material。当前支持的英文 material prompt 包括：
+`set_material` and `\editing ...` can apply Infinigen procedural material prompts to existing generated assets.
 
 ```text
 wood, wooden, natural wood, hardwood floor, table wood,
@@ -226,25 +256,15 @@ plastic, black plastic, rough plastic, translucent plastic,
 clear plastic, rubber, bumpy rubber
 ```
 
-示例 prompt：
+## Generation Scripts and Metadata
 
-```text
-make the table wooden
-make the chair ceramic
-make the microwave brushed metal
-make the monitor black plastic
-\editing make the desk marble
-```
-
-## Generation Script 和 Metadata
-
-每个由 Agent 生成的 asset 都会写入：
+Every generated asset writes a script under:
 
 ```text
 generation_scripts/{Scene_xxx}/asset_xxx.py
 ```
 
-script 记录的信息包括：
+The script records:
 
 ```text
 asset_id
@@ -258,60 +278,91 @@ source_prompt
 edit_prompt
 ```
 
-同时，Blender object 自身会写入 custom properties：
+Blender objects also receive custom properties:
 
 ```text
-gosim_asset_id
-gosim_object_id
-gosim_category
-gosim_factory
-gosim_seed
-gosim_source_prompt
-gosim_edit_prompt
-gosim_generation_script
+agent_asset_id
+agent_object_id
+agent_category
+agent_factory
+agent_seed
+agent_source_prompt
+agent_edit_prompt
+agent_generation_script
 ```
 
-这就是 editing 能成立的原因：系统知道这个资产“从哪里来、怎么生成、用什么参数生成、后面被怎样改过”。
+This is what makes editing possible: the system knows where an asset came from, which factory produced it, which seed was used, and which edits have been applied.
 
-## Editing 原理
+## Editing Workflow
 
-编辑入口是：
+The editing tool is:
 
 ```text
 edit_generated_asset
 ```
 
-推荐用户写法：
+Execution flow:
+
+1. Parse the target asset from the editing prompt.
+2. Resolve the target through `scene_index.json`.
+3. Read the old asset factory, seed, source prompt, bounding box, and dimensions.
+4. Respawn a new asset from the same Infinigen factory.
+5. Apply the requested edit, such as color or material.
+6. If `preserve_size=true`, fit the new asset to the old bounding box.
+7. Move the new asset back to the old position.
+8. Delete the old object group.
+9. Write a new generation script and edit metadata.
+10. Run placement/physics rules and rebuild the scene index.
+
+This is replacement-style editing from a stored generation record, not a blind mesh edit.
+
+### Editing Prompt Format
+
+Editing prompts must explicitly start with:
 
 ```text
-\editing make the desk in the scene green
-\editing 把场景里的桌子改成黑色
+\editing
 ```
 
-执行流程：
+Standard form:
 
-1. 从 prompt 中解析 target，例如 `desk`。
-2. 通过 scene index 找到目标 asset。
-3. 读取旧 asset 的 factory、seed、source prompt、bbox 和 dimensions。
-4. 使用同一个 Infinigen factory 重新 spawn 一个新 asset。
-5. 应用 edit prompt 中提取的修改，例如 color/material。
-6. 如果 `preserve_size=true`，按旧 bounding box 尺寸计算缩放并对齐。
-7. 把新 asset 放回旧 asset 的位置。
-8. 删除旧 object group。
-9. 写入新的 generation script 和 edit metadata。
-10. 运行物理规则并重建 scene index。
+```text
+\editing <edit instruction mentioning the target asset>
+```
 
-这不是简单地给 mesh 改个名字，而是 **基于原生成脚本的 replacement editing**。
+Recommended templates:
+
+```text
+\editing make the <target category/object> <material or color>
+\editing change the <target category/object> to <material or color>
+\editing make the <target category/object> larger/smaller
+\editing replace/regenerate the <target category/object> as <new style>
+```
+
+Rules:
+
+- Keep the `\editing` prefix.
+- Mention a target, such as `desk`, `apple`, `asset_xxx`, or a Blender object name.
+- Prefer assets generated by this system because they have generation metadata and scripts.
+- Do not use `add ...` for editing. Editing is a replacement workflow, not a creation workflow.
+- Prefer material names from [Prompt Materials](#prompt-materials).
+
+Example prompts:
+
+```text
+\editing make the desk marble
+\editing make asset_2f1e36e18681 black metal
+```
 
 ## Scene Index
 
-Blender Addon Agent 会维护：
+The Blender Addon Agent maintains:
 
 ```text
-gosim_scene_index.json
+scene_index.json
 ```
 
-每个 asset 的索引字段：
+Each indexed asset includes:
 
 ```text
 object_id, root_name, category, factory, object_names,
@@ -320,17 +371,17 @@ bbox_min, bbox_max, center, dimensions,
 materials, relations, description, generation
 ```
 
-这个索引用于：
+The scene index supports:
 
-- 自然语言引用解析：`desk`、`书桌`、`asset_xxx`、Blender object name。
-- 空间关系操作：`place_on`、`place_near`、`place_against_wall`。
-- editing target 定位。
-- Visual Verifier 的 scene context。
-- 未来接入 RAG/vector DB。
+- Natural-language reference resolution: `desk`, `asset_xxx`, Blender object names, and supported aliases.
+- Spatial operations: `place_on`, `place_near`, and `place_against_wall`.
+- Editing target lookup.
+- Visual Verifier scene context.
+- Future RAG/vector search integration.
 
 ## Tool Surface
 
-当前 Blender socket 命令：
+Blender socket commands:
 
 ```text
 ping
@@ -355,46 +406,46 @@ adjust_camera_from_render
 render_scene
 ```
 
-旧版 `generate_3d_model` Python client 接口仍保留兼容，但在这个项目中会转发到 `add_infinigen_asset`，即使用 Infinigen reference 资产生成路径。
+The legacy-compatible Python client method `generate_3d_model` is retained, but in this project it forwards to `add_infinigen_asset`.
 
-## 项目结构
+## Project Layout
 
 ```text
 .
-  app.py                              # Gradio UI 入口
-  addon.py                            # Blender addon 入口
+  app.py                              # Gradio UI entry point
+  addon.py                            # Blender addon entry point
   blender_addon/
-    gosim_infinigen_agent_addon.py    # socket server、Infinigen 生成、editing、索引、相机、渲染
+    infinigen_agent_addon.py          # socket server, generation, editing, indexing, camera, render
   src/
     agent/
       agent.py                        # Code Generator Agent
       visual_verifier.py              # Visual Verifier Agent
-    blender/client.py                 # UI 使用的 Blender socket client
+    blender/client.py                 # UI Blender socket client
     llm/                              # LLM provider adapters
-  gosim_blender_agent/
-    planner.py                        # 规则 planner fallback
-    agent.py                          # CLI Agent
+  infinigen_blender_agent/
+    planner.py                        # Rule planner fallback
+    agent.py                          # CLI agent
     client.py                         # CLI socket client
-    infinigen_runner.py               # out-of-process Infinigen runner
-  ui/                                 # Gradio/ModelScope Studio UI
-  tests/                              # Visual Verifier scope guard 测试
-  third_party/infinigen/              # vendored Infinigen reference
-  generation_scripts/                 # generated/editable Python asset scripts
-  renders/                            # render outputs
+    infinigen_runner.py               # Out-of-process Infinigen runner
+  ui/                                 # Gradio / ModelScope Studio UI
+  tests/                              # Visual Verifier scope-guard tests
+  third_party/infinigen/              # Vendored Infinigen reference
+  generation_scripts/                 # Generated/editable Python asset scripts
+  renders/                            # Render outputs
 ```
 
 ## Quick Start
 
 ### 1. Install
 
-推荐 Python 3.11。脚本会优先使用 `/opt/miniconda3/envs/infinigen/bin/python`，也可以通过 `GOSIM_PYTHON` 指定 Python。
+Python 3.11 is recommended.
 
 ```bash
-cd /Users/ll/Gosim2026-Paris
+cd /path/to/infinigen-blender-agent
 python3 -m pip install -r requirements.txt
 ```
 
-可编辑安装：
+Editable install:
 
 ```bash
 python3 -m pip install -e ".[ui,llm]"
@@ -402,7 +453,7 @@ python3 -m pip install -e ".[ui,llm]"
 
 ### 2. Configure LLMs
 
-编辑 `config.json`，给需要的 provider 填入 `api_key`。Code Generator 和 Visual Verifier 可以使用不同模型：
+Edit `config.json` and add API keys for the providers you want to use. The Code Generator and Visual Verifier can use different models:
 
 ```json
 {
@@ -425,70 +476,53 @@ python3 -m pip install -e ".[ui,llm]"
 }
 ```
 
-### 3. Start Blender Addon Agent
+### 3. Start the Blender Addon Agent
 
 ```bash
-cd /Users/ll/Gosim2026-Paris
+cd /path/to/infinigen-blender-agent
 bash scripts/start_blender_agent.sh
 ```
 
-默认使用：
+Default Blender binary:
 
 ```text
 third_party/infinigen/Blender.app/Contents/MacOS/Blender
 ```
 
-监听地址：
+Default socket:
 
 ```text
 127.0.0.1:9876
 ```
 
-### 4. Start UI
+### 4. Start the UI
 
-另开一个终端：
+In another terminal:
 
 ```bash
-cd /Users/ll/Gosim2026-Paris
+cd /path/to/infinigen-blender-agent
 bash scripts/start_ui.sh
 ```
 
-访问：
+Open:
 
 ```text
 http://127.0.0.1:7860
 ```
 
-## Demo Prompts
-
-```text
-添加一张书桌
-add a desk lamp
-把台灯放到书桌上
-add an apple
-add a pineapple
-put the pineapple on the desk
-\editing make the desk in the scene green
-\editing 把苹果改成绿色
-把椅子放到床旁边
-adjust the camera so the desk is centered
-render preview
-save the scene
-```
-
 ## CLI
 
 ```bash
-python3 -m gosim_blender_agent.cli ping
-python3 -m gosim_blender_agent.cli chat "添加一张书桌"
-python3 -m gosim_blender_agent.cli chat "\\editing make the desk in the scene green"
-python3 -m gosim_blender_agent.cli render --path renders/preview.png
+python3 -m infinigen_blender_agent.cli ping
+python3 -m infinigen_blender_agent.cli chat "add a marble side table"
+python3 -m infinigen_blender_agent.cli chat "\\editing make the desk marble"
+python3 -m infinigen_blender_agent.cli render --path renders/preview.png
 ```
 
-生成单房间 Infinigen bedroom：
+Generate a single-room Infinigen bedroom:
 
 ```bash
-python3 -m gosim_blender_agent.cli generate-bedroom \
+python3 -m infinigen_blender_agent.cli generate-bedroom \
   --output outputs/bedroom/coarse \
   --seed 0
 ```
@@ -496,23 +530,23 @@ python3 -m gosim_blender_agent.cli generate-bedroom \
 ## Environment Variables
 
 ```text
-GOSIM_INFINIGEN_ROOT    默认 third_party/infinigen
-GOSIM_BLENDER_BIN       默认 third_party/infinigen/Blender.app/Contents/MacOS/Blender
-GOSIM_BLENDER_HOST      默认 127.0.0.1
-GOSIM_BLENDER_PORT      默认 9876
-GOSIM_RENDER_DIR        默认 renders
-GOSIM_SOCKET_TIMEOUT    默认 120
-GOSIM_PYTHON            指定启动 UI/Blender 依赖注入时使用的 Python
-GRADIO_SERVER_PORT      默认 7860
-GOSIM_UI_INBROWSER      默认 1，设为 0 可禁止自动打开浏览器
+INFINIGEN_AGENT_INFINIGEN_ROOT    default: third_party/infinigen
+INFINIGEN_AGENT_BLENDER_BIN       default: third_party/infinigen/Blender.app/Contents/MacOS/Blender
+INFINIGEN_AGENT_BLENDER_HOST      default: 127.0.0.1
+INFINIGEN_AGENT_BLENDER_PORT      default: 9876
+INFINIGEN_AGENT_RENDER_DIR        default: renders
+INFINIGEN_AGENT_SOCKET_TIMEOUT    default: 120
+INFINIGEN_AGENT_PYTHON            optional Python executable override
+GRADIO_SERVER_PORT                default: 7860
+INFINIGEN_AGENT_UI_INBROWSER      default: 1; set to 0 to avoid opening a browser automatically
 ```
 
-OpenAI-compatible planner fallback：
+OpenAI-compatible planner fallback:
 
 ```text
-GOSIM_LLM_BASE_URL
-GOSIM_LLM_API_KEY
-GOSIM_LLM_MODEL
+INFINIGEN_AGENT_LLM_BASE_URL
+INFINIGEN_AGENT_LLM_API_KEY
+INFINIGEN_AGENT_LLM_MODEL
 ```
 
 ## Test
@@ -521,8 +555,17 @@ GOSIM_LLM_MODEL
 python3 -m unittest tests/test_visual_verifier.py
 ```
 
-当前测试覆盖 Visual Verifier scope guard，确保 verifier 不会越权删除 prompt 外已有对象。
+## TODO
 
-## 一句话总结
+- **Expand asset coverage**: add more Infinigen factories and keep the category registry synchronized with the Blender addon.
+- **Broaden editing operations**: support more procedural edits beyond material/color replacement, including shape parameters where Infinigen factories expose them.
+- **Persist edit history**: store generation and editing records in a durable SQLite/JSONL scene database instead of relying only on object custom properties and script files.
+- **Improve collision handling**: replace current bounding-box heuristics with stronger support-surface and interpenetration checks.
+- **Vector search over scene assets**: embed `description`, `relations`, and edit history for better natural-language target lookup.
+- **Regression tests for Blender tools**: add integration tests for `add_infinigen_asset`, `edit_generated_asset`, `place_on`, and `render_scene` in a headless Blender environment.
+- **UI polish**: expose generation scripts, asset metadata, and verifier decisions directly in the right-side panel.
+- **Packaging**: document or automate the vendored Blender/Infinigen setup for non-macOS environments.
 
-GOSIM 不是一次性生成 mesh 的 demo，而是一个以 Infinigen 为 reference、以 Python generation script 为控制面、由多个 Agent 协作完成生成、editing、索引、渲染和验证的可控 3D asset workflow。
+## Summary
+
+This project treats 3D generation as a controllable script-backed workflow. Infinigen provides the procedural reference assets; the agents plan, execute, verify, and edit those assets through structured Blender tools.
