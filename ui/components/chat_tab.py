@@ -196,24 +196,25 @@ def create_chat_tab(session_id_param):
                 
             # 右侧：显示区域
             with gr.Column(scale=4, elem_classes=["side-panel"]):
-                render_image = gr.Image(
-                    label="Render Result",
-                    value=None,
-                    interactive=False,
-                    height=320,
-                    elem_classes=["render-preview"],
-                )
-                scene_info = gr.Textbox(
-                    label="Scene Info",
-                    value="Connect Blender&Agent to load scene info.",
-                    interactive=False,
-                    lines=5,
-                    elem_classes=["scene-info"],
-                )
-                
-                with gr.Row(elem_classes=["primary-actions", "action-row"]):
-                    render_btn = gr.Button("Render Now")
-                    update_info_btn = gr.Button("Refresh Scene Info")
+                with gr.Column(elem_classes=["side-stack"]):
+                    render_image = gr.Image(
+                        label="Render Result",
+                        value=None,
+                        interactive=False,
+                        height=320,
+                        elem_classes=["render-preview"],
+                    )
+                    scene_info = gr.Textbox(
+                        label="Scene Info",
+                        value="Connect Blender&Agent to load scene info.",
+                        interactive=False,
+                        lines=5,
+                        elem_classes=["scene-info"],
+                    )
+
+                    with gr.Row(elem_classes=["primary-actions", "action-row"]):
+                        render_btn = gr.Button("Render Now")
+                        update_info_btn = gr.Button("Refresh Scene Info")
     
     
         # 手动渲染按钮

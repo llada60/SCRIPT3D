@@ -78,51 +78,77 @@ def create_chat_interface():
         ),
         vertical=True,
     ):
-        chatbot = pro.Chatbot(
-            height="100%",
-            min_height=0,
-            auto_scroll=True,
-            user_config={
-                "header": "user",
-                "avatar": USER_AVATAR,
-                "placement": "end",
-                "shape": "round",
-                "variant": "borderless",
-            },
-            bot_config={
-                "header": "3D Generation Agent",
-                "avatar": GENERATION_AGENT_AVATAR,
-                "placement": "start",
-                "shape": "round",
-                "variant": "borderless",
-            },
-            elem_classes=["gosim-chatbot"],
+        # 消息滚动区：只让这一块滚动
+        with antd.Flex(
+            elem_classes=["gosim-chat-scroll"],
             elem_style=dict(
-                padding="0",
-                minWidth="0",
+                flex="1 1 0",
                 minHeight="0",
-                overflow="hidden",
+                overflowY="auto",
+                overflowX="hidden",
             ),
-            value=[
-                generation_message("Hi. I can help edit your Blender scene. Tell me what you want to add or adjust."),
-            ],
-        )
-
-        with pro.MultimodalInput(
-            upload_config=dict(upload_button_tooltip="Attach image"),
-            placeholder="Enter an instruction for Blender/Infinigen",
-            elem_classes=["gosim-chat-input"],
-            elem_style=dict(
-                marginTop="auto",
-                flexShrink=0,
+            vertical=True,
+        ):
+            chatbot = pro.Chatbot(
+                height="auto",
+                min_height=0,
+                auto_scroll=True,
+                user_config={
+                    "header": "user",
+                    "avatar": USER_AVATAR,
+                    "placement": "end",
+                    "shape": "round",
+                    "variant": "borderless",
+                },
+                bot_config={
+                    "header": "3D Generation Agent",
+                    "avatar": GENERATION_AGENT_AVATAR,
+                    "placement": "start",
+                    "shape": "round",
+                    "variant": "borderless",
+                },
+                elem_classes=["gosim-chatbot"],
+                elem_style=dict(
+                    padding="0",
+                    minWidth="0",
+                    minHeight="0",
+                    height="auto",
+                    overflow="visible",
+                ),
+                value=[
+                    generation_message("Hi. I can help edit your Blender scene. Tell me what you want to add or adjust."),
+                ],
             )
-        ) as input:
-            with ms.Slot("prefix"):
-                with antd.Tooltip("Clear chat history"):
-                    with antd.Button(
-                        value=None, variant="text", color="default"
-                    ) as clear_btn:
-                        with ms.Slot("icon"):
-                            antd.Icon("ClearOutlined")
+
+        # 输入区：单独拉出来，固定在聊天区域底部，不参与滚动
+        with antd.Flex(
+            elem_classes=["gosim-chat-input-dock"],
+            elem_style=dict(
+                flex="0 0 auto",
+                minHeight="0",
+                overflow="visible",
+            ),
+            vertical=True,
+        ):
+            with pro.MultimodalInput(
+                upload_config=dict(upload_button_tooltip="Attach image"),
+                placeholder="Enter an instruction for Blender/Infinigen",
+                elem_classes=["gosim-chat-input"],
+                elem_style=dict(
+                    marginTop="0",
+                    flexShrink=0,
+                    position="relative",
+                    bottom="auto",
+                    zIndex=20,
+                    background="transparent",
+                )
+            ) as input:
+                with ms.Slot("prefix"):
+                    with antd.Tooltip("Clear chat history"):
+                        with antd.Button(
+                            value=None, variant="text", color="default"
+                        ) as clear_btn:
+                            with ms.Slot("icon"):
+                                antd.Icon("ClearOutlined")
 
     return chatbot, input, clear_btn
