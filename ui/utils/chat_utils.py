@@ -4,6 +4,7 @@
 """
 import json
 import logging
+import html
 from typing import Dict, List, Any, Optional, Generator
 import gradio as gr
 from ui.utils.blender_utils import get_scene_info, render_scene_and_return_image
@@ -96,6 +97,29 @@ def _append_completion_notice(chatbot_value):
         message["content"] = [content, {"type": "text", "content": notice}]
 
 
+def _append_assistant_text(chatbot_value, text: str) -> None:
+    message = chatbot_value[-1]
+    content = message.get("content")
+    if isinstance(content, str):
+        message["content"] = f"{content}{text}"
+    elif content is None:
+        message["content"] = text.lstrip("\n")
+    elif isinstance(content, list):
+        content.append({"type": "text", "content": text})
+    else:
+        message["content"] = [content, {"type": "text", "content": text}]
+
+
+def _format_tool_result_details(function_result: Dict[str, Any]) -> str:
+    json_text = json.dumps(function_result, ensure_ascii=False, indent=2)
+    return (
+        '\n\n<details class="tool-result-details">'
+        "<summary>查看详细</summary>"
+        f"<pre><code>{html.escape(json_text)}</code></pre>"
+        "</details>"
+    )
+
+
 def submit(input_value, chatbot_value):
     """处理聊天提交事件"""
     # 获取当前Agent
@@ -143,6 +167,7 @@ def submit(input_value, chatbot_value):
         # 自动生成的最大轮数
         max_auto_rounds = 10
         current_rounds = 0
+        original_user_text = (input_value or {}).get("text", "")
         
         # 循环生成，直到收到"完成"开头的回复或达到最大轮数
         while current_rounds < max_auto_rounds:
@@ -155,6 +180,7 @@ def submit(input_value, chatbot_value):
             first_output = True
             current_function = None  # 记录当前正在执行的函数
             response_content = ""  # 存储完整的响应内容
+            blocked_by_guard = False
             
             for chunk in response_stream:
                 content_chunk = chunk.get("content")
@@ -182,11 +208,9 @@ def submit(input_value, chatbot_value):
                 
                 # 如果有函数调用结果，添加函数调用结果到当前消息
                 if function_result:
-                    # 在当前消息中添加函数调用结果
-                    if "content" not in chatbot_value[-1] or chatbot_value[-1]["content"] is None:
-                        chatbot_value[-1]["content"] = json.dumps(function_result, ensure_ascii=False, indent=2)
-                    else:
-                        chatbot_value[-1]["content"] += f"\n\n```json\n{json.dumps(function_result, ensure_ascii=False, indent=2)}\n```"
+                    if function_result.get("status") == "blocked":
+                        blocked_by_guard = True
+                    _append_assistant_text(chatbot_value, _format_tool_result_details(function_result))
                 
                 # 第一次有内容输出时就取消loading状态
                 if first_output and (content_chunk or function_call or function_result):
@@ -209,6 +233,7 @@ def submit(input_value, chatbot_value):
                 response_text.startswith("全部完成") or 
                 response_text.endswith("全部完成") or
                 "等待用户指令" in response_text or
+                blocked_by_guard or
                 current_rounds >= max_auto_rounds
             )
             
@@ -223,9 +248,18 @@ def submit(input_value, chatbot_value):
                 
                 # 下一轮传入空字符串作为用户消息
                 if not response_content:
-                    user_message = ""
+                    user_message = (
+                        f"继续完成原始用户指令：{original_user_text}\n"
+                        "严格限制：只执行原始指令明确要求的动作；"
+                        "不要添加、删除、移动或修改任何原始指令未要求的物体。"
+                        "如果原始指令已经完成，只回复“全部完成”。"
+                    )
                 else:
-                    user_message = "继续"
+                    user_message = (
+                        f"继续完成原始用户指令：{original_user_text}\n"
+                        "严格限制：不要扩展场景，不要添加未要求的物体。"
+                        "如果原始指令已经完成，只回复“全部完成”。"
+                    )
 
         _append_completion_notice(chatbot_value)
         
@@ -464,11 +498,7 @@ def retry(chatbot_value):
             
             # 如果有函数调用结果，添加函数调用结果到当前消息
             if function_result:
-                # 在当前消息中添加函数调用结果
-                if "content" not in chatbot_value[-1] or chatbot_value[-1]["content"] is None:
-                    chatbot_value[-1]["content"] = json.dumps(function_result, ensure_ascii=False, indent=2)
-                else:
-                    chatbot_value[-1]["content"] += f"\n\n```json\n{json.dumps(function_result, ensure_ascii=False, indent=2)}\n```"
+                _append_assistant_text(chatbot_value, _format_tool_result_details(function_result))
                 message_changed = True
             
             # 第一次有内容输出时就取消loading状态

@@ -324,17 +324,54 @@ class RulePlanner:
         return spec.category if spec else None
 
     def _extract_support_after_place(self, text: str) -> str | None:
+        alias_values = {
+            "桌": "desk",
+            "桌子": "desk",
+            "书桌": "desk",
+            "餐桌": "table",
+            "床头柜": "side_table",
+            "椅": "chair",
+            "椅子": "chair",
+            "座椅": "chair",
+            "沙发": "sofa",
+            "床": "bed",
+            "table": "table",
+            "desk": "desk",
+            "nightstand": "side_table",
+            "chair": "chair",
+            "sofa": "sofa",
+            "bed": "bed",
+        }
+        match = re.search(r"放[到在]\s*(?P<support>[^，。,\.]+?)上", text, re.IGNORECASE)
+        if match:
+            support = match.group("support").strip()
+            lowered_support = support.lower()
+            for key in sorted(alias_values, key=len, reverse=True):
+                if key in lowered_support:
+                    return alias_values[key]
+            spec = resolve_asset(support)
+            if spec:
+                return spec.category
+
         support_aliases = {
             "桌": "desk",
             "桌子": "desk",
             "书桌": "desk",
             "餐桌": "table",
             "床头柜": "side_table",
+            "椅": "chair",
+            "椅子": "chair",
+            "座椅": "chair",
+            "沙发": "sofa",
+            "床": "bed",
             "table": "table",
             "desk": "desk",
             "nightstand": "side_table",
+            "chair": "chair",
+            "sofa": "sofa",
+            "bed": "bed",
         }
-        for key, value in support_aliases.items():
+        for key, value in sorted(support_aliases.items(), key=lambda item: len(item[0]), reverse=True):
             if key in text.lower():
                 return value
         return None

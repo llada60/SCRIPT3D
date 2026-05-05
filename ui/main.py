@@ -239,6 +239,26 @@ CUSTOM_CSS = """
     background: rgba(0, 0, 0, 0.18) !important;
 }
 
+.gosim-chatbot details.tool-result-details {
+    margin-top: 10px;
+}
+
+.gosim-chatbot details.tool-result-details summary {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.10);
+    color: inherit;
+    cursor: pointer;
+    user-select: none;
+}
+
+.gosim-chatbot details.tool-result-details pre {
+    margin-top: 8px;
+}
+
 .primary-actions button {
     min-height: 44px;
     font-weight: 650;
