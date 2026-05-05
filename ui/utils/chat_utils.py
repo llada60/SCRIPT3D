@@ -81,6 +81,21 @@ def _format_user_chat_content(input_value):
     ]
 
 
+def _append_completion_notice(chatbot_value):
+    if not chatbot_value:
+        return
+    message = chatbot_value[-1]
+    content = message.get("content")
+    notice = "已全部完成"
+    if isinstance(content, str):
+        if notice not in content:
+            message["content"] = f"{content.rstrip()}\n\n{notice}" if content.strip() else notice
+    elif content is None:
+        message["content"] = notice
+    else:
+        message["content"] = [content, {"type": "text", "content": notice}]
+
+
 def submit(input_value, chatbot_value):
     """处理聊天提交事件"""
     # 获取当前Agent
@@ -211,6 +226,8 @@ def submit(input_value, chatbot_value):
                     user_message = ""
                 else:
                     user_message = "继续"
+
+        _append_completion_notice(chatbot_value)
         
     except Exception as e:
         logger.error(f"聊天过程中发生错误: {str(e)}")
@@ -466,6 +483,7 @@ def retry(chatbot_value):
         # 完成对话，更新最后一条消息的状态
         chatbot_value[-1]["loading"] = False
         chatbot_value[-1]["status"] = "done"
+        _append_completion_notice(chatbot_value)
         
     except Exception as e:
         logger.error(f"重试过程中发生错误: {str(e)}")
