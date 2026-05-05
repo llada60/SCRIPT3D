@@ -1,0 +1,39 @@
+{
+  "blender_mcp": {
+    "host": "localhost",
+    "port": 9876
+  },
+  "llm": {
+    "default_model": "r9s",
+    "r9s": {
+      "api_key": "sk-0LzEXcX4qa5jXl3gCd77FfAcB8Ec4368Aa7e2a0760Ea1f6e",
+      "model": "deepseek-v4-flash",
+      "api_base": "https://api.r9s.ai/v1"
+    },
+    "zhipu": {
+      "api_key": "",
+      "model": "glm-4-plus"
+    },
+    "doubao": {
+      "api_key": "",
+      "model": "doubao-1-5-pro-32k-250115"
+    },
+    "moonshot": {
+      "api_key": "",
+      "model": "kimi-latest-32k"
+    },
+    "aimlapi": {
+      "api_key": "",
+      "model": "claude-3-7-sonnet-20250219"
+    },
+    "deepseek": {
+      "api_key": "",
+      "model": "deepseek-chat"
+    },
+    "openai": {
+      "api_key": "",
+      "model": "gpt-4o",
+      "api_base": "https://api.openai.com/v1"
+    }
+  }
+} 

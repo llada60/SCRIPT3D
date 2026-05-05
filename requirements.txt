@@ -1,0 +1,11 @@
+anthropic>=0.8.0
+zhipuai>=2.0.0
+openai>=1.1.0
+gradio==5.50.0
+requests>=2.31.0
+websocket-client>=1.7.0
+tenacity>=8.2.0
+volcengine-python-sdk[ark]>=0.1.0
+gradio_modal==0.0.4
+modelscope_studio==1.6.1
+pydantic>=2.7
