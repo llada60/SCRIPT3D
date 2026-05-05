@@ -9,6 +9,7 @@ bl_info = {
 }
 
 import json
+import importlib
 import math
 import os
 import queue
@@ -24,20 +25,6 @@ from typing import Any
 
 import bpy
 from mathutils import Euler, Vector
-
-
-def _disable_user_site_packages() -> None:
-    try:
-        import site
-
-        user_site = site.getusersitepackages()
-    except Exception:
-        return
-    if user_site:
-        sys.path[:] = [path for path in sys.path if path != user_site]
-
-
-_disable_user_site_packages()
 
 
 HOST = os.getenv("GOSIM_BLENDER_HOST", "127.0.0.1")
@@ -862,11 +849,89 @@ def _ensure_infinigen_on_path() -> Path:
     raise RuntimeError("Could not locate Infinigen root. Set GOSIM_INFINIGEN_ROOT.")
 
 
+def _candidate_python_dependency_paths() -> list[Path]:
+    candidates: list[Path] = []
+
+    for env_name in ("GOSIM_PYTHON_SITE_PACKAGES", "PYTHONPATH"):
+        for raw_path in os.getenv(env_name, "").split(os.pathsep):
+            if raw_path:
+                candidates.append(Path(raw_path).expanduser())
+
+    for env_name in ("CONDA_PREFIX", "VIRTUAL_ENV"):
+        prefix = os.getenv(env_name)
+        if not prefix:
+            continue
+        for version in {
+            f"python{sys.version_info.major}.{sys.version_info.minor}",
+            "python3.11",
+        }:
+            candidates.append(Path(prefix) / "lib" / version / "site-packages")
+
+    try:
+        import site
+
+        candidates.extend(Path(path).expanduser() for path in site.getsitepackages())
+        candidates.append(Path(site.getusersitepackages()).expanduser())
+    except Exception:
+        pass
+
+    candidates.append(
+        Path.home()
+        / ".local"
+        / "lib"
+        / f"python{sys.version_info.major}.{sys.version_info.minor}"
+        / "site-packages"
+    )
+    candidates.append(Path("/opt/miniconda3/envs/infinigen/lib/python3.11/site-packages"))
+
+    seen: set[str] = set()
+    existing: list[Path] = []
+    for path in candidates:
+        normalized = str(path)
+        if normalized in seen or not path.exists():
+            continue
+        seen.add(normalized)
+        existing.append(path)
+    return existing
+
+
+def _ensure_python_module(module_name: str, package_name: str | None = None) -> None:
+    try:
+        importlib.import_module(module_name)
+        return
+    except ModuleNotFoundError as exc:
+        if exc.name != module_name:
+            raise
+
+    for path in _candidate_python_dependency_paths():
+        module_path = path / module_name
+        module_file = path / f"{module_name}.py"
+        if not module_path.exists() and not module_file.exists():
+            continue
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
+        try:
+            importlib.import_module(module_name)
+            print(f"[GOSIM] Loaded Python dependency '{module_name}' from {path}")
+            return
+        except ModuleNotFoundError as exc:
+            if exc.name != module_name:
+                raise
+
+    package = package_name or module_name
+    raise ModuleNotFoundError(
+        f"Missing Python module '{module_name}'. Install '{package}' into the Python "
+        "environment used by scripts/start_blender_agent.sh, or set "
+        "GOSIM_PYTHON_SITE_PACKAGES to a site-packages directory visible to Blender."
+    )
+
+
 def _configure_infinigen_once() -> None:
     global INFINIGEN_CONFIGURED
     if INFINIGEN_CONFIGURED:
         return
     _ensure_infinigen_on_path()
+    _ensure_python_module("gin", "gin-config")
     try:
         from infinigen.core import init
 
