@@ -6,9 +6,13 @@
   "llm": {
     "default_model": "r9s",
     "r9s": {
-      "api_key": "sk-0LzEXcX4qa5jXl3gCd77FfAcB8Ec4368Aa7e2a0760Ea1f6e",
+      "api_key": "sk-Xbfem76VCfCDHxtHBf85886799E343189e78BeBcB64f5345",
       "model": "deepseek-v4-flash",
       "api_base": "https://api.r9s.ai/v1"
+    },
+    "claude": {
+      "api_key": "",
+      "model": "claude-3-7-sonnet"
     },
     "zhipu": {
       "api_key": "",
@@ -32,8 +36,7 @@
     },
     "openai": {
       "api_key": "",
-      "model": "gpt-4o",
-      "api_base": "https://api.openai.com/v1"
+      "model": "gpt-4o"
     }
   }
 } 
