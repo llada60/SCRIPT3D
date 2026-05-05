@@ -5,18 +5,18 @@ Run inside Blender with the GOSIM addon loaded if you want to replay it.
 import json
 
 GENERATION = {
-  "asset_id": "asset_7d32734e03e7",
-  "category": "table",
-  "factory_path": "infinigen.assets.objects.tables.TableDiningFactory",
-  "seed": 1,
+  "asset_id": "asset_a2ee5dd401b5",
+  "category": "apple",
+  "factory_path": "infinigen.assets.objects.fruits.FruitFactoryApple",
+  "seed": 0,
   "scale": 1.0,
   "location": [
-    0.0,
-    0.0,
-    0.0
+    0.2800000011920929,
+    0.2800000011920929,
+    0.699999988079071
   ],
   "material_color": null,
-  "source_prompt": "table"
+  "source_prompt": null
 }
 
 def replay(client):

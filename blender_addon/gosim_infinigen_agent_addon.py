@@ -9,6 +9,7 @@ bl_info = {
 }
 
 import json
+import importlib
 import math
 import os
 import queue
@@ -26,20 +27,6 @@ import bpy
 from mathutils import Euler, Vector
 
 
-def _disable_user_site_packages() -> None:
-    try:
-        import site
-
-        user_site = site.getusersitepackages()
-    except Exception:
-        return
-    if user_site:
-        sys.path[:] = [path for path in sys.path if path != user_site]
-
-
-_disable_user_site_packages()
-
-
 HOST = os.getenv("GOSIM_BLENDER_HOST", "127.0.0.1")
 PORT = int(os.getenv("GOSIM_BLENDER_PORT", "9876"))
 REQUEST_QUEUE: queue.Queue[tuple[dict[str, Any], threading.Event, dict[str, Any]]] = queue.Queue()
@@ -47,6 +34,14 @@ SERVER: socketserver.ThreadingTCPServer | None = None
 SERVER_THREAD: threading.Thread | None = None
 TIMER_REGISTERED = False
 INFINIGEN_CONFIGURED = False
+AGENT_STATUS: dict[str, Any] = {
+    "state": "idle",
+    "message": "Agent 空闲",
+    "operation": "",
+    "run_id": "",
+    "cancel_requested": False,
+    "updated_at": 0.0,
+}
 
 
 ASSET_FACTORY_ALIASES = {
@@ -207,6 +202,40 @@ def _err(message: str) -> dict[str, Any]:
     return {"ok": False, "status": "error", "error": message, "message": message}
 
 
+def _set_agent_status(
+    state: str,
+    message: str = "",
+    *,
+    run_id: str | None = None,
+    operation: str | None = None,
+) -> dict[str, Any]:
+    if state in {"running", "idle"}:
+        AGENT_STATUS["cancel_requested"] = False
+    AGENT_STATUS["state"] = state
+    AGENT_STATUS["message"] = message or AGENT_STATUS.get("message") or ""
+    AGENT_STATUS["operation"] = operation if operation is not None else AGENT_STATUS.get("operation", "")
+    if run_id is not None:
+        AGENT_STATUS["run_id"] = run_id
+    if state in {"idle", "cancelled", "error"}:
+        AGENT_STATUS["operation"] = ""
+    AGENT_STATUS["updated_at"] = time.time()
+    _sync_scene_agent_status()
+    return dict(AGENT_STATUS)
+
+
+def _sync_scene_agent_status() -> None:
+    scene = getattr(bpy.context, "scene", None)
+    if scene is None:
+        return
+    try:
+        scene.gosim_agent_state = str(AGENT_STATUS.get("state", "idle"))
+        scene.gosim_agent_message = str(AGENT_STATUS.get("message", ""))
+        scene.gosim_agent_operation = str(AGENT_STATUS.get("operation", ""))
+        scene.gosim_agent_cancel_requested = bool(AGENT_STATUS.get("cancel_requested", False))
+    except Exception:
+        pass
+
+
 class _ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
     daemon_threads = True
@@ -248,9 +277,37 @@ def _process_queue() -> float | None:
             handler = COMMANDS.get(command)
             if handler is None:
                 slot["response"] = _err(f"Unknown command: {command}")
+            elif AGENT_STATUS.get("cancel_requested") and command not in {
+                "get_agent_status",
+                "set_agent_status",
+                "cancel_agent_run",
+                "ping",
+            }:
+                slot["response"] = _err("Agent run cancelled")
             else:
-                slot["response"] = _ok(handler(payload))
+                previous_status = dict(AGENT_STATUS)
+                if command not in {"get_agent_status", "set_agent_status", "cancel_agent_run", "ping"}:
+                    _set_agent_status(
+                        "running",
+                        f"Blender 正在执行：{command}",
+                        run_id=previous_status.get("run_id") or None,
+                        operation=command,
+                    )
+                try:
+                    slot["response"] = _ok(handler(payload))
+                finally:
+                    if command not in {"get_agent_status", "set_agent_status", "cancel_agent_run", "ping"}:
+                        if AGENT_STATUS.get("cancel_requested"):
+                            _set_agent_status("cancelled", "Agent 运行已停止")
+                        else:
+                            _set_agent_status(
+                                previous_status.get("state", "idle"),
+                                previous_status.get("message", ""),
+                                run_id=previous_status.get("run_id") or None,
+                                operation=previous_status.get("operation") or None,
+                            )
         except Exception:
+            _set_agent_status("error", "Blender 命令执行失败")
             slot["response"] = _err(traceback.format_exc())
         finally:
             event.set()
@@ -862,11 +919,89 @@ def _ensure_infinigen_on_path() -> Path:
     raise RuntimeError("Could not locate Infinigen root. Set GOSIM_INFINIGEN_ROOT.")
 
 
+def _candidate_python_dependency_paths() -> list[Path]:
+    candidates: list[Path] = []
+
+    for env_name in ("GOSIM_PYTHON_SITE_PACKAGES", "PYTHONPATH"):
+        for raw_path in os.getenv(env_name, "").split(os.pathsep):
+            if raw_path:
+                candidates.append(Path(raw_path).expanduser())
+
+    for env_name in ("CONDA_PREFIX", "VIRTUAL_ENV"):
+        prefix = os.getenv(env_name)
+        if not prefix:
+            continue
+        for version in {
+            f"python{sys.version_info.major}.{sys.version_info.minor}",
+            "python3.11",
+        }:
+            candidates.append(Path(prefix) / "lib" / version / "site-packages")
+
+    try:
+        import site
+
+        candidates.extend(Path(path).expanduser() for path in site.getsitepackages())
+        candidates.append(Path(site.getusersitepackages()).expanduser())
+    except Exception:
+        pass
+
+    candidates.append(
+        Path.home()
+        / ".local"
+        / "lib"
+        / f"python{sys.version_info.major}.{sys.version_info.minor}"
+        / "site-packages"
+    )
+    candidates.append(Path("/opt/miniconda3/envs/infinigen/lib/python3.11/site-packages"))
+
+    seen: set[str] = set()
+    existing: list[Path] = []
+    for path in candidates:
+        normalized = str(path)
+        if normalized in seen or not path.exists():
+            continue
+        seen.add(normalized)
+        existing.append(path)
+    return existing
+
+
+def _ensure_python_module(module_name: str, package_name: str | None = None) -> None:
+    try:
+        importlib.import_module(module_name)
+        return
+    except ModuleNotFoundError as exc:
+        if exc.name != module_name:
+            raise
+
+    for path in _candidate_python_dependency_paths():
+        module_path = path / module_name
+        module_file = path / f"{module_name}.py"
+        if not module_path.exists() and not module_file.exists():
+            continue
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
+        try:
+            importlib.import_module(module_name)
+            print(f"[GOSIM] Loaded Python dependency '{module_name}' from {path}")
+            return
+        except ModuleNotFoundError as exc:
+            if exc.name != module_name:
+                raise
+
+    package = package_name or module_name
+    raise ModuleNotFoundError(
+        f"Missing Python module '{module_name}'. Install '{package}' into the Python "
+        "environment used by scripts/start_blender_agent.sh, or set "
+        "GOSIM_PYTHON_SITE_PACKAGES to a site-packages directory visible to Blender."
+    )
+
+
 def _configure_infinigen_once() -> None:
     global INFINIGEN_CONFIGURED
     if INFINIGEN_CONFIGURED:
         return
     _ensure_infinigen_on_path()
+    _ensure_python_module("gin", "gin-config")
     try:
         from infinigen.core import init
 
@@ -1018,6 +1153,29 @@ def _spawn_infinigen_asset(
 
 def cmd_ping(_payload: dict[str, Any]) -> dict[str, Any]:
     return {"message": "pong", "host": HOST, "port": PORT, "blend_path": bpy.data.filepath}
+
+
+def cmd_set_agent_status(payload: dict[str, Any]) -> dict[str, Any]:
+    return _set_agent_status(
+        str(payload.get("state", "idle")),
+        str(payload.get("message", "")),
+        run_id=payload.get("run_id") or None,
+        operation=payload.get("operation") or None,
+    )
+
+
+def cmd_get_agent_status(_payload: dict[str, Any]) -> dict[str, Any]:
+    _sync_scene_agent_status()
+    return dict(AGENT_STATUS)
+
+
+def cmd_cancel_agent_run(_payload: dict[str, Any]) -> dict[str, Any]:
+    AGENT_STATUS["cancel_requested"] = True
+    AGENT_STATUS["state"] = "cancelling"
+    AGENT_STATUS["message"] = "已请求停止 Agent 运行"
+    AGENT_STATUS["updated_at"] = time.time()
+    _sync_scene_agent_status()
+    return dict(AGENT_STATUS)
 
 
 def cmd_get_scene_info(_payload: dict[str, Any]) -> dict[str, Any]:
@@ -1333,6 +1491,296 @@ def _ensure_camera() -> bpy.types.Object:
     return camera
 
 
+def _camera_agent_subject_objects(target: str | None) -> list[bpy.types.Object]:
+    if target:
+        return _objects_for_asset(_resolve_asset(target))
+
+    index = _build_scene_index()
+    names: set[str] = set()
+    for asset in index["assets"]:
+        if asset.get("category") not in STRUCTURAL_CATEGORIES:
+            names.update(asset.get("object_names", []))
+
+    subjects = [obj for obj in bpy.context.scene.objects if obj.name in names]
+    if subjects:
+        return subjects
+
+    return [
+        obj
+        for obj in bpy.context.scene.objects
+        if obj.type not in {"CAMERA", "LIGHT"} and not obj.hide_render
+    ]
+
+
+def _subject_center(subjects: list[bpy.types.Object]) -> Vector:
+    bbox_min, bbox_max = _bounds_for_objects(subjects)
+    return (bbox_min + bbox_max) * 0.5
+
+
+def _look_at(camera: bpy.types.Object, target: Vector) -> None:
+    direction = target - camera.location
+    if direction.length <= 1e-6:
+        return
+    camera.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
+
+
+def _fit_camera_to_subjects(camera: bpy.types.Object, subjects: list[bpy.types.Object], target_fill: float) -> dict[str, Any]:
+    bbox_min, bbox_max = _bounds_for_objects(subjects)
+    center = (bbox_min + bbox_max) * 0.5
+    radius = max(0.25, max((corner - center).length for corner in [bbox_min, bbox_max]))
+    direction = center - camera.location
+    if direction.length <= 1e-6:
+        direction = Vector((0.6, -0.7, 0.45))
+    direction.normalize()
+
+    cam_data = camera.data
+    angle_x = getattr(cam_data, "angle_x", cam_data.angle)
+    angle_y = getattr(cam_data, "angle_y", cam_data.angle)
+    fit_angle = max(0.1, min(angle_x, angle_y) * 0.5)
+    distance = radius / (max(0.2, min(0.95, target_fill)) * math.tan(fit_angle))
+    camera.location = center - direction * distance
+    _look_at(camera, center)
+    return {
+        "center": [float(v) for v in center],
+        "radius": float(radius),
+        "distance": float(distance),
+    }
+
+
+def _camera_view_quality(subjects: list[bpy.types.Object], margin: float = 0.035) -> dict[str, Any]:
+    from bpy_extras.object_utils import world_to_camera_view
+
+    scene = bpy.context.scene
+    camera = _ensure_camera()
+    projected: list[tuple[float, float]] = []
+    invisible: list[str] = []
+    for obj in subjects:
+        corners = _world_corners(obj)
+        if not corners:
+            continue
+        obj_points = [world_to_camera_view(scene, camera, corner) for corner in corners]
+        in_front = all(point.z > 0 for point in obj_points)
+        in_frame = all(margin <= point.x <= 1.0 - margin and margin <= point.y <= 1.0 - margin for point in obj_points)
+        if not in_front or not in_frame:
+            invisible.append(obj.name)
+        projected.extend((float(point.x), float(point.y)) for point in obj_points if point.z > 0)
+
+    if not projected:
+        return {
+            "good": False,
+            "reason": "no_subject_points_in_camera_view",
+            "all_visible": False,
+            "close_enough": False,
+            "fill": [0.0, 0.0],
+            "invisible_objects": [obj.name for obj in subjects],
+        }
+
+    xs = [point[0] for point in projected]
+    ys = [point[1] for point in projected]
+    fill_x = max(xs) - min(xs)
+    fill_y = max(ys) - min(ys)
+    fill = max(fill_x, fill_y)
+    all_visible = not invisible and min(xs) >= margin and max(xs) <= 1.0 - margin and min(ys) >= margin and max(ys) <= 1.0 - margin
+    close_enough = 0.48 <= fill <= 0.92
+    good = all_visible and close_enough
+    if not all_visible:
+        reason = "not_all_objects_visible"
+    elif not close_enough:
+        reason = "camera_too_far" if fill < 0.48 else "camera_too_close"
+    else:
+        reason = "good"
+    return {
+        "good": good,
+        "reason": reason,
+        "all_visible": all_visible,
+        "close_enough": close_enough,
+        "fill": [float(fill_x), float(fill_y)],
+        "projected_bbox": [float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))],
+        "invisible_objects": invisible[:20],
+    }
+
+
+def _render_camera_mask(path: Path, resolution: tuple[int, int], subjects: list[bpy.types.Object]) -> None:
+    scene = bpy.context.scene
+    hidden_states = [(obj, obj.hide_render) for obj in scene.objects]
+    film_transparent = scene.render.film_transparent
+    filepath = scene.render.filepath
+    file_format = scene.render.image_settings.file_format
+    color_mode = scene.render.image_settings.color_mode
+    resolution_x = scene.render.resolution_x
+    resolution_y = scene.render.resolution_y
+    subject_names = {obj.name for obj in subjects}
+    try:
+        for obj in scene.objects:
+            obj.hide_render = obj.name not in subject_names
+        scene.render.film_transparent = True
+        scene.render.image_settings.file_format = "PNG"
+        scene.render.image_settings.color_mode = "RGBA"
+        scene.render.resolution_x = int(resolution[0])
+        scene.render.resolution_y = int(resolution[1])
+        scene.render.filepath = str(path)
+        bpy.ops.render.render(write_still=True)
+    finally:
+        for obj, hide_render in hidden_states:
+            obj.hide_render = hide_render
+        scene.render.film_transparent = film_transparent
+        scene.render.image_settings.file_format = file_format
+        scene.render.image_settings.color_mode = color_mode
+        scene.render.resolution_x = resolution_x
+        scene.render.resolution_y = resolution_y
+        scene.render.filepath = filepath
+
+
+def _alpha_bbox_from_image(path: Path, alpha_threshold: float = 0.02) -> dict[str, Any]:
+    image = bpy.data.images.load(str(path), check_existing=False)
+    try:
+        width, height = image.size
+        pixels = list(image.pixels)
+        min_x, min_y = width, height
+        max_x, max_y = -1, -1
+        count = 0
+        for y in range(height):
+            row = y * width * 4
+            for x in range(width):
+                alpha = pixels[row + x * 4 + 3]
+                if alpha > alpha_threshold:
+                    min_x = min(min_x, x)
+                    min_y = min(min_y, y)
+                    max_x = max(max_x, x)
+                    max_y = max(max_y, y)
+                    count += 1
+        if count == 0:
+            raise RuntimeError("Camera agent could not find visible subject pixels in the render")
+        return {
+            "image_size": [int(width), int(height)],
+            "bbox": [int(min_x), int(min_y), int(max_x), int(max_y)],
+            "center": [((min_x + max_x) / 2) / width, ((min_y + max_y) / 2) / height],
+            "fill": [((max_x - min_x + 1) / width), ((max_y - min_y + 1) / height)],
+            "pixel_count": count,
+        }
+    finally:
+        bpy.data.images.remove(image)
+
+
+def _move_camera_from_bbox(
+    camera: bpy.types.Object,
+    bbox: dict[str, Any],
+    subject_center: Vector,
+    target_fill: float,
+    recenter_strength: float,
+    zoom_strength: float,
+) -> dict[str, Any]:
+    quat = camera.matrix_world.to_quaternion()
+    right = quat @ Vector((1, 0, 0))
+    up = quat @ Vector((0, 1, 0))
+    forward = quat @ Vector((0, 0, -1))
+    to_subject = subject_center - camera.location
+    distance = max(0.25, float(to_subject.dot(forward)))
+
+    cam_data = camera.data
+    image_w, image_h = bbox["image_size"]
+    aspect = image_w / max(1, image_h)
+    angle_y = getattr(cam_data, "angle_y", cam_data.angle)
+    view_h = 2.0 * distance * math.tan(angle_y * 0.5)
+    view_w = view_h * aspect
+
+    center_x, center_y = bbox["center"]
+    fill_x, fill_y = bbox["fill"]
+    fill = max(fill_x, fill_y)
+    offset_x = center_x - 0.5
+    offset_y = center_y - 0.5
+
+    lateral = right * (offset_x * view_w * recenter_strength)
+    vertical = up * (offset_y * view_h * recenter_strength)
+    if fill < target_fill:
+        dolly_amount = distance * min(0.65, (target_fill - fill) / max(target_fill, 1e-6)) * zoom_strength
+    else:
+        dolly_amount = -distance * min(0.65, (fill - target_fill) / max(fill, 1e-6)) * zoom_strength
+    dolly = forward * dolly_amount
+    camera.location += lateral + vertical + dolly
+    return {
+        "distance": distance,
+        "fill": fill,
+        "offset": [offset_x, offset_y],
+        "movement": [float(v) for v in (lateral + vertical + dolly)],
+        "dolly": float(dolly_amount),
+    }
+
+
+def cmd_adjust_camera_from_render(payload: dict[str, Any]) -> dict[str, Any]:
+    target = payload.get("target")
+    output_path = payload.get("output_path")
+    if not output_path:
+        base = Path(bpy.data.filepath).parent if bpy.data.filepath else Path.cwd()
+        output_path = str(base / "renders" / "camera_agent_preview.png")
+    output_path_obj = Path(output_path)
+    output_path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+    resolution = [
+        int(payload.get("resolution_x", 768)),
+        int(payload.get("resolution_y", 432)),
+    ]
+    target_fill = max(0.2, min(0.95, float(payload.get("target_fill", 0.72))))
+    max_iterations = max(1, min(6, int(payload.get("max_iterations", 3))))
+    tolerance = max(0.01, float(payload.get("tolerance", 0.06)))
+    recenter_strength = max(0.0, min(1.0, float(payload.get("recenter_strength", 0.75))))
+    zoom_strength = max(0.0, min(1.0, float(payload.get("zoom_strength", 0.65))))
+
+    scene = bpy.context.scene
+    camera = _ensure_camera()
+    scene.camera = camera
+    subjects = _camera_agent_subject_objects(str(target) if target else None)
+    if not subjects:
+        raise RuntimeError("Camera agent found no renderable subject objects")
+
+    initial_quality = _camera_view_quality(subjects)
+    fit_result = None
+    if not initial_quality.get("good"):
+        fit_result = _fit_camera_to_subjects(camera, subjects, target_fill)
+
+    mask_path = output_path_obj.with_name(f"{output_path_obj.stem}_mask.png")
+    steps: list[dict[str, Any]] = []
+    subject_center = _subject_center(subjects)
+    for _ in range(max_iterations):
+        _render_camera_mask(mask_path, (resolution[0], resolution[1]), subjects)
+        bbox = _alpha_bbox_from_image(mask_path)
+        movement = _move_camera_from_bbox(
+            camera,
+            bbox,
+            subject_center,
+            target_fill,
+            recenter_strength,
+            zoom_strength,
+        )
+        steps.append({"bbox": bbox, "camera_movement": movement})
+        centered = abs(movement["offset"][0]) <= tolerance and abs(movement["offset"][1]) <= tolerance
+        framed = abs(movement["fill"] - target_fill) <= tolerance
+        if centered and framed:
+            break
+
+    render_result = cmd_render_scene(
+        {
+            "output_path": str(output_path_obj),
+            "resolution_x": int(payload.get("final_resolution_x", 1280)),
+            "resolution_y": int(payload.get("final_resolution_y", 720)),
+            "auto_adjust_camera": False,
+        }
+    )
+    return {
+        "message": "Camera adjusted from rendered image analysis",
+        "target": target or "non_structural_scene_assets",
+        "camera": camera.name,
+        "camera_location": [float(v) for v in camera.location],
+        "camera_rotation_euler": [float(v) for v in camera.rotation_euler],
+        "initial_quality": initial_quality,
+        "fit": fit_result,
+        "final_quality": _camera_view_quality(subjects),
+        "mask_path": str(mask_path),
+        "render": render_result,
+        "steps": steps,
+    }
+
+
 def cmd_render_scene(payload: dict[str, Any]) -> dict[str, Any]:
     path = payload.get("path") or payload.get("output_path")
     if not path:
@@ -1347,16 +1795,54 @@ def cmd_render_scene(payload: dict[str, Any]) -> dict[str, Any]:
             int(payload.get("resolution_y", 720)),
         ]
     scene = bpy.context.scene
-    scene.camera = _ensure_camera()
+    camera = _ensure_camera()
+    scene.camera = camera
+    camera_adjustment = None
+    if payload.get("auto_adjust_camera", True):
+        subjects = _camera_agent_subject_objects(payload.get("camera_target"))
+        if subjects:
+            quality = _camera_view_quality(subjects)
+            if not quality.get("good"):
+                target_fill = max(0.2, min(0.95, float(payload.get("camera_target_fill", 0.72))))
+                fit_result = _fit_camera_to_subjects(camera, subjects, target_fill)
+                mask_path = path_obj.with_name(f"{path_obj.stem}_camera_check_mask.png")
+                steps: list[dict[str, Any]] = []
+                subject_center = _subject_center(subjects)
+                for _ in range(max(1, min(4, int(payload.get("camera_max_iterations", 3))))):
+                    _render_camera_mask(mask_path, (768, 432), subjects)
+                    bbox = _alpha_bbox_from_image(mask_path)
+                    movement = _move_camera_from_bbox(camera, bbox, subject_center, target_fill, 0.75, 0.65)
+                    steps.append({"bbox": bbox, "camera_movement": movement})
+                    quality_after_step = _camera_view_quality(subjects)
+                    if quality_after_step.get("good"):
+                        break
+                camera_adjustment = {
+                    "adjusted": True,
+                    "before": quality,
+                    "fit": fit_result,
+                    "after": _camera_view_quality(subjects),
+                    "mask_path": str(mask_path),
+                    "steps": steps,
+                }
+            else:
+                camera_adjustment = {"adjusted": False, "before": quality, "after": quality}
     scene.render.resolution_x = int(resolution[0])
     scene.render.resolution_y = int(resolution[1])
     scene.render.filepath = str(path_obj)
     bpy.ops.render.render(write_still=True)
-    return {"path": str(path_obj), "saved_to": str(path_obj), "message": "Rendered preview"}
+    return {
+        "path": str(path_obj),
+        "saved_to": str(path_obj),
+        "message": "Rendered preview",
+        "camera_auto_adjust": camera_adjustment,
+    }
 
 
 COMMANDS = {
     "ping": cmd_ping,
+    "set_agent_status": cmd_set_agent_status,
+    "get_agent_status": cmd_get_agent_status,
+    "cancel_agent_run": cmd_cancel_agent_run,
     "get_scene_info": cmd_get_scene_info,
     "rebuild_scene_index": cmd_rebuild_scene_index,
     "query_objects": cmd_query_objects,
@@ -1373,6 +1859,7 @@ COMMANDS = {
     "place_near": cmd_place_near,
     "place_against_wall": cmd_place_against_wall,
     "apply_physics_rules": cmd_apply_physics_rules,
+    "adjust_camera_from_render": cmd_adjust_camera_from_render,
     "render_scene": cmd_render_scene,
 }
 
@@ -1405,6 +1892,17 @@ class GOSIM_OT_rebuild_index(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class GOSIM_OT_cancel_agent_run(bpy.types.Operator):
+    bl_idname = "gosim.cancel_agent_run"
+    bl_label = "Stop Agent Run"
+    bl_description = "Request the UI/agent loop to stop at the next cancellation check"
+
+    def execute(self, _context: bpy.types.Context) -> set[str]:
+        cmd_cancel_agent_run({})
+        self.report({"WARNING"}, "Requested Agent stop")
+        return {"FINISHED"}
+
+
 class GOSIM_PT_panel(bpy.types.Panel):
     bl_label = "GOSIM Agent"
     bl_idname = "GOSIM_PT_panel"
@@ -1415,9 +1913,30 @@ class GOSIM_PT_panel(bpy.types.Panel):
     def draw(self, context: bpy.types.Context) -> None:
         layout = self.layout
         layout.label(text=f"Socket: {HOST}:{PORT}")
-        layout.label(text=f"Status: {'running' if SERVER else 'stopped'}")
+        layout.label(text=f"Server: {'running' if SERVER else 'stopped'}")
         layout.operator("gosim.start_server")
         layout.operator("gosim.stop_server")
+
+        layout.separator()
+        _sync_scene_agent_status()
+        state = getattr(context.scene, "gosim_agent_state", AGENT_STATUS.get("state", "idle"))
+        message = getattr(context.scene, "gosim_agent_message", AGENT_STATUS.get("message", ""))
+        operation = getattr(context.scene, "gosim_agent_operation", AGENT_STATUS.get("operation", ""))
+        cancel_requested = getattr(
+            context.scene,
+            "gosim_agent_cancel_requested",
+            AGENT_STATUS.get("cancel_requested", False),
+        )
+        layout.label(text=f"Agent: {state}")
+        if operation:
+            layout.label(text=f"Operation: {operation}")
+        if message:
+            layout.label(text=message)
+        cancel_row = layout.row()
+        cancel_row.enabled = state in {"running", "cancelling"} and not cancel_requested
+        cancel_row.operator("gosim.cancel_agent_run", icon="CANCEL")
+
+        layout.separator()
         layout.operator("gosim.rebuild_index")
 
 
@@ -1425,6 +1944,7 @@ CLASSES = (
     GOSIM_OT_start_server,
     GOSIM_OT_stop_server,
     GOSIM_OT_rebuild_index,
+    GOSIM_OT_cancel_agent_run,
     GOSIM_PT_panel,
 )
 
@@ -1432,12 +1952,25 @@ CLASSES = (
 def register() -> None:
     for cls in CLASSES:
         bpy.utils.register_class(cls)
+    bpy.types.Scene.gosim_agent_state = bpy.props.StringProperty(default="idle")
+    bpy.types.Scene.gosim_agent_message = bpy.props.StringProperty(default="Agent 空闲")
+    bpy.types.Scene.gosim_agent_operation = bpy.props.StringProperty(default="")
+    bpy.types.Scene.gosim_agent_cancel_requested = bpy.props.BoolProperty(default=False)
+    _sync_scene_agent_status()
     if os.getenv("GOSIM_NO_AUTOSTART") != "1":
         start_server()
 
 
 def unregister() -> None:
     stop_server()
+    for attr in (
+        "gosim_agent_state",
+        "gosim_agent_message",
+        "gosim_agent_operation",
+        "gosim_agent_cancel_requested",
+    ):
+        if hasattr(bpy.types.Scene, attr):
+            delattr(bpy.types.Scene, attr)
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)
 

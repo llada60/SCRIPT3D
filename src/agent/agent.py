@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 import logging
+import time
+import uuid
 from typing import Any, Dict, Iterator, List, Optional, Union
 
 from ..blender.client import BlenderClient
@@ -33,6 +35,7 @@ PHYSICAL_RULES_PROMPT = """你是 Blender/Infinigen 场景编辑 planner。
 - 表达“旁边/靠墙”时优先用 place_near/place_against_wall。
 - 大型家具默认落地；地毯必须落地。
 - 缩放保持在合理范围，执行层会把极端 scale clamp 到安全范围。
+- 用户要求调整视角、构图、相机位置、让渲染主体居中或变大/变小时，优先调用 adjust_camera_from_render。
 不要生成 Python 代码，只使用提供的 function call。
 """
 
@@ -44,6 +47,8 @@ class BlenderAgent:
         self.llm = llm
         self.blender_client = blender_client
         self.messages: list[dict[str, Any]] = [{"role": "system", "content": PHYSICAL_RULES_PROMPT}]
+        self.current_run_id: str | None = None
+        self._last_cancel_check = 0.0
         self._init_functions()
 
     def update_blender_client(self, blender_client: BlenderClient):
@@ -221,11 +226,30 @@ class BlenderAgent:
             },
             {
                 "name": "render_scene",
-                "description": "渲染当前场景并返回预览路径。",
+                "description": "渲染当前场景并返回预览路径。默认会先检查相机视角，如果主体不够近或没有看见所有非结构物体，会自动调整 camera 后再渲染。",
                 "parameters": {
                     "output_path": {"type": "string", "description": "输出图片路径，可选。"},
                     "resolution_x": {"type": "integer", "description": "宽度，可选。"},
                     "resolution_y": {"type": "integer", "description": "高度，可选。"},
+                    "auto_adjust_camera": {"type": "boolean", "description": "是否在渲染前自动检查并调整 camera，默认 true。"},
+                    "camera_target": {"type": "string", "description": "可选，指定用于检查构图的目标对象；不填则使用所有非结构资产。"},
+                    "camera_target_fill": {"type": "number", "description": "目标主体画面占比，默认 0.72。"},
+                },
+                "required": [],
+            },
+            {
+                "name": "adjust_camera_from_render",
+                "description": "Camera agent：先渲染透明 mask 图片，分析目标/场景在图片中的像素位置和占比，再自动平移/推拉 Blender camera，最后渲染新的预览图。适合用户要求调整视角、让对象居中、让画面构图更好或渲染主体太小/太大时使用。",
+                "parameters": {
+                    "target": {"type": "string", "description": "要构图的目标对象/类别/自然语言描述；不填则使用场景中的非结构资产。"},
+                    "output_path": {"type": "string", "description": "调整后预览图输出路径，可选。"},
+                    "target_fill": {"type": "number", "description": "目标主体画面占比，0.2-0.95，默认 0.72。"},
+                    "max_iterations": {"type": "integer", "description": "根据渲染图迭代调整次数，默认 3。"},
+                    "tolerance": {"type": "number", "description": "居中和缩放误差容忍度，默认 0.06。"},
+                    "resolution_x": {"type": "integer", "description": "分析用 mask 渲染宽度，默认 768。"},
+                    "resolution_y": {"type": "integer", "description": "分析用 mask 渲染高度，默认 432。"},
+                    "final_resolution_x": {"type": "integer", "description": "最终预览图宽度，默认 1280。"},
+                    "final_resolution_y": {"type": "integer", "description": "最终预览图高度，默认 720。"},
                 },
                 "required": [],
             },
@@ -269,6 +293,9 @@ class BlenderAgent:
         if not hasattr(self.llm, "chat_stream"):
             raise NotImplementedError("当前 LLM 不支持流式响应")
 
+        self.current_run_id = uuid.uuid4().hex
+        self._last_cancel_check = 0.0
+        self._set_agent_status("running", "LLM 正在生成回复", operation="llm")
         response_stream = self.llm.chat_stream(
             messages=self.messages,
             functions=functions_to_use,
@@ -277,31 +304,50 @@ class BlenderAgent:
 
         accumulated_content = ""
         function_call = None
-        for chunk in response_stream:
-            content_chunk = chunk.get("content")
-            function_call_chunk = chunk.get("function_call")
-            if content_chunk:
-                accumulated_content += content_chunk
-            if function_call_chunk:
-                function_call = function_call_chunk
-            yield chunk
+        try:
+            for chunk in response_stream:
+                self._raise_if_blender_cancelled()
+                content_chunk = chunk.get("content")
+                function_call_chunk = chunk.get("function_call")
+                if content_chunk:
+                    accumulated_content += content_chunk
+                if function_call_chunk:
+                    function_call = function_call_chunk
+                yield chunk
 
-        if accumulated_content:
-            self.add_message("assistant", accumulated_content)
-        elif function_call:
-            self.add_message("assistant", f"我将执行工具: {function_call['name']}")
+            self._raise_if_blender_cancelled(force=True)
 
-        if function_call:
-            function_result = self._execute_function(function_call)
-            self.add_message(
-                "user",
-                f"函数 {function_call['name']} 的执行结果: {json.dumps(function_result, ensure_ascii=False)}",
-            )
+            if accumulated_content:
+                self.add_message("assistant", accumulated_content)
+            elif function_call:
+                self.add_message("assistant", f"我将执行工具: {function_call['name']}")
+
+            if function_call:
+                function_result = self._execute_function(function_call)
+                self.add_message(
+                    "user",
+                    f"函数 {function_call['name']} 的执行结果: {json.dumps(function_result, ensure_ascii=False)}",
+                )
+                yield {
+                    "content": None,
+                    "function_call": function_call,
+                    "function_result": function_result,
+                }
+        except GeneratorExit:
+            self._set_agent_status("cancelled", "UI 已停止 Agent 运行")
+            raise
+        except RuntimeError as exc:
+            if str(exc) != "Agent run cancelled from Blender":
+                raise
+            self._set_agent_status("cancelled", "Blender 已请求停止 Agent 运行")
             yield {
-                "content": None,
-                "function_call": function_call,
-                "function_result": function_result,
+                "content": "已停止运行。",
+                "function_call": None,
+                "function_result": {"status": "cancelled", "message": "Blender 已请求停止 Agent 运行"},
             }
+        finally:
+            if self.current_run_id:
+                self.current_run_id = None
 
     def _execute_function(self, function_call: Dict[str, Any]) -> Dict[str, Any]:
         try:
@@ -315,14 +361,51 @@ class BlenderAgent:
             if not hasattr(self.blender_client, function_name):
                 return {"status": "error", "message": f"函数 {function_name} 不存在"}
 
+            self._raise_if_blender_cancelled(force=True)
+            self._set_agent_status("running", f"正在 Blender 中执行：{function_name}", operation=function_name)
             func = getattr(self.blender_client, function_name)
             logger.info("执行函数: %s, 参数: %s", function_name, arguments)
             result = func(**arguments)
             logger.info("函数执行结果: %s", result)
+            self._raise_if_blender_cancelled(force=True)
             return result
+        except RuntimeError as exc:
+            if str(exc) == "Agent run cancelled from Blender":
+                raise
+            logger.error("执行函数 %s 时出错: %s", function_call.get("name", "未知"), exc)
+            return {"status": "error", "message": f"执行函数时出错: {exc}"}
         except Exception as exc:
             logger.error("执行函数 %s 时出错: %s", function_call.get("name", "未知"), exc)
             return {"status": "error", "message": f"执行函数时出错: {exc}"}
+
+    def _set_agent_status(self, state: str, message: str = "", operation: str | None = None) -> None:
+        if self.blender_client is None or not hasattr(self.blender_client, "set_agent_status"):
+            return
+        try:
+            self.blender_client.set_agent_status(
+                state=state,
+                message=message,
+                run_id=self.current_run_id,
+                operation=operation,
+            )
+        except Exception as exc:
+            logger.debug("同步 Agent 状态到 Blender 失败: %s", exc)
+
+    def _raise_if_blender_cancelled(self, force: bool = False) -> None:
+        if self.blender_client is None or not hasattr(self.blender_client, "get_agent_status"):
+            return
+        now = time.monotonic()
+        if not force and now - self._last_cancel_check < 0.5:
+            return
+        self._last_cancel_check = now
+        try:
+            status = self.blender_client.get_agent_status()
+        except Exception as exc:
+            logger.debug("读取 Blender Agent 状态失败: %s", exc)
+            return
+        result = status.get("result", status)
+        if isinstance(result, dict) and result.get("cancel_requested"):
+            raise RuntimeError("Agent run cancelled from Blender")
 
     def update_blender_client(self, blender_client: BlenderClient):
         self.blender_client = blender_client

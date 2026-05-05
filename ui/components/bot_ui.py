@@ -68,10 +68,10 @@ def create_chat_interface():
             # minHeight=550,
             height="100%",
             maxHeight=700,
-            backgroundColor="#171a20",
-            borderRadius="8px",
-            padding="14px",
-            border="1px solid rgba(255,255,255,0.08)",
+            backgroundColor="transparent",
+            borderRadius="0",
+            padding="0",
+            border="0",
         ),
         vertical=True,
     ):
@@ -83,7 +83,7 @@ def create_chat_interface():
                 # flex=1,
                 # overflow="auto",  # 添加滚动条
                 # scrollBehavior="smooth",  # 平滑滚动效果
-                padding="10px",
+                padding="8px 10px 4px",
                 
             ),
             value=[

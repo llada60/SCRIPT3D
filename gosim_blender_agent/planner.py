@@ -51,6 +51,11 @@ class RulePlanner:
         if any(key in lowered for key in ("列出", "查看", "有哪些", "scene info", "objects", "物体")):
             return [Action("get_scene_info"), Action("rebuild_scene_index")]
 
+        if any(key in lowered for key in ("相机", "摄像机", "视角", "构图", "居中", "camera", "framing", "frame")):
+            spec = resolve_asset(raw)
+            target = self._extract_target(raw) or (spec.category if spec else None)
+            return [Action("adjust_camera_from_render", {"target": target}), Action("rebuild_scene_index")]
+
         if any(key in lowered for key in ("渲染", "预览", "render", "preview")):
             return [Action("render_scene")]
 

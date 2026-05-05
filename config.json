@@ -6,8 +6,8 @@
   "llm": {
     "default_model": "r9s",
     "r9s": {
-      "api_key": "sk-Xbfem76VCfCDHxtHBf85886799E343189e78BeBcB64f5345",
-      "model": "deepseek-v4-flash",
+      "api_key": "sk-PMCS6gY8GKhfCd3hD8710070EbC64e29942e623b3317182f",
+      "model": "claude-opus-4-6",
       "api_base": "https://api.r9s.ai/v1"
     },
     "claude": {

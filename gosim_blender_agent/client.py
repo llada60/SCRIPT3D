@@ -135,11 +135,48 @@ class BlenderClient:
     def apply_physics_rules(self, target: str | None = None) -> Any:
         return self.request("apply_physics_rules", {"target": target})
 
-    def render_scene(self, path: str | Path | None = None, resolution: tuple[int, int] = (1280, 720)) -> Any:
+    def adjust_camera_from_render(
+        self,
+        target: str | None = None,
+        output_path: str | Path | None = None,
+        resolution_x: int = 768,
+        resolution_y: int = 432,
+        target_fill: float = 0.72,
+        max_iterations: int = 3,
+        tolerance: float = 0.06,
+        final_resolution_x: int = 1280,
+        final_resolution_y: int = 720,
+    ) -> Any:
+        return self.request(
+            "adjust_camera_from_render",
+            {
+                "target": target,
+                "output_path": str(output_path) if output_path else None,
+                "resolution_x": resolution_x,
+                "resolution_y": resolution_y,
+                "target_fill": target_fill,
+                "max_iterations": max_iterations,
+                "tolerance": tolerance,
+                "final_resolution_x": final_resolution_x,
+                "final_resolution_y": final_resolution_y,
+            },
+        )
+
+    def render_scene(
+        self,
+        path: str | Path | None = None,
+        resolution: tuple[int, int] = (1280, 720),
+        auto_adjust_camera: bool = True,
+        camera_target: str | None = None,
+        camera_target_fill: float = 0.72,
+    ) -> Any:
         return self.request(
             "render_scene",
             {
                 "path": str(path) if path else None,
                 "resolution": list(resolution),
+                "auto_adjust_camera": auto_adjust_camera,
+                "camera_target": camera_target,
+                "camera_target_fill": camera_target_fill,
             },
         )
