@@ -78,7 +78,7 @@ def create_chat_interface():
         chatbot = pro.Chatbot(
             height=590,
             auto_scroll=True,
-            elem_classes=["gosim-chatbot"],
+            elem_classes=["agent-chatbot"],
             elem_style=dict(
                 # flex=1,
                 # overflow="auto",  # 添加滚动条

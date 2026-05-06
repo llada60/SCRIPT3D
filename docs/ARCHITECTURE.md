@@ -23,7 +23,7 @@ flowchart LR
 The LLM or rule planner never receives raw `bpy` code execution rights. It emits
 structured tool calls only. The Blender addon validates object references, resolves
 semantic aliases through the scene index, performs geometry edits, and then writes
-an updated `gosim_scene_index.json`.
+an updated `scene_index.json`.
 
 ## Scene Index
 
@@ -75,14 +75,14 @@ Implemented Blender commands:
 
 There are two generation paths:
 
-1. Out-of-process scene generation through `gosim_blender_agent.infinigen_runner`.
+1. Out-of-process scene generation through `infinigen_blender_agent.infinigen_runner`.
    This calls `python -m infinigen.launch_blender` inside the vendored
    `third_party/infinigen` copy.
 
 2. In-Blender asset insertion through `add_infinigen_asset`.
    This imports Infinigen factory classes such as `BedFactory`,
    `SimpleDeskFactory`, `DeskLampFactory`, and fruit factories under
-   `infinigen.assets.objects.fruits`, spawns the asset, tags it with GOSIM
+   `infinigen.assets.objects.fruits`, spawns the asset, tags it with agent metadata
    metadata, places it in the current scene, and refreshes the index.
 
 ## Generated Asset Editing

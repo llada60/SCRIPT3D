@@ -1,5 +1,5 @@
-"""Reproducible generation record for a GOSIM/Infinigen asset.
-Run inside Blender with the GOSIM addon loaded if you want to replay it.
+"""Reproducible generation record for a Infinigen asset.
+Run inside Blender with the Infinigen addon loaded if you want to replay it.
 """
 
 import json

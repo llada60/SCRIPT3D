@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-GOSIM Infinigen Blender Agent 应用程序入口
+Infinigen Blender Agent 应用程序入口
 """
 import os
 import sys
@@ -42,7 +42,7 @@ def main():
         app.launch(
             server_name="127.0.0.1", 
             server_port=port,
-            inbrowser=os.getenv("GOSIM_UI_INBROWSER", "1") != "0"
+            inbrowser=os.getenv("INFINIGEN_AGENT_UI_INBROWSER", "1") != "0"
         )
     except Exception as e:
         logger.error(f"Error starting the Gradio UI: {str(e)}")
@@ -58,8 +58,8 @@ def fail_safe_main():
     except Exception as e:
         # 如果主UI无法启动，则显示一个简单的错误信息界面
         logger.error(f"Failed to start the app; showing fallback UI: {str(e)}")
-        with gr.Blocks(title="GOSIM Infinigen Blender Agent (Error Mode)") as app:
-            gr.Markdown("## GOSIM Infinigen Blender Agent Startup Error")
+        with gr.Blocks(title="Infinigen Blender Agent (Error Mode)") as app:
+            gr.Markdown("## Infinigen Blender Agent Startup Error")
             gr.Markdown(f"""
             An error occurred while starting the application:
             
@@ -83,7 +83,7 @@ def fail_safe_main():
         app.launch(
             server_name="127.0.0.1", 
             server_port=port,
-            inbrowser=os.getenv("GOSIM_UI_INBROWSER", "1") != "0"
+            inbrowser=os.getenv("INFINIGEN_AGENT_UI_INBROWSER", "1") != "0"
         )
 
 if __name__ == "__main__":

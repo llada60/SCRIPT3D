@@ -1,5 +1,5 @@
 [project]
-name = "gosim-blender-agent"
+name = "infinigen-blender-agent"
 version = "0.1.0"
 description = "Natural-language Blender agent for editing Infinigen scenes."
 readme = "README.md"
@@ -26,8 +26,8 @@ llm = [
 ]
 
 [project.scripts]
-gosim-agent = "gosim_blender_agent.cli:main"
-gosim-agent-ui = "app:fail_safe_main"
+infinigen-agent = "infinigen_blender_agent.cli:main"
+infinigen-agent-ui = "app:fail_safe_main"
 
 [tool.ruff]
 line-length = 100

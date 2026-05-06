@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-GOSIM Infinigen Blender Agent UI主入口
+Infinigen Blender Agent UI主入口
 
 UI组件说明：
 1. 连接步骤区域 - 分为两行的布局设计
@@ -32,25 +32,25 @@ import ui.globals as globals
 
 CUSTOM_CSS = """
 :root {
-    --gosim-bg: #101112;
-    --gosim-surface: #181a1b;
-    --gosim-surface-2: #222524;
-    --gosim-border: #363a37;
-    --gosim-border-soft: rgba(255, 255, 255, 0.08);
-    --gosim-text: #f4f7fb;
-    --gosim-muted: #9aa4b2;
-    --gosim-accent: #62d6a6;
+    --agent-bg: #101112;
+    --agent-surface: #181a1b;
+    --agent-surface-2: #222524;
+    --agent-border: #363a37;
+    --agent-border-soft: rgba(255, 255, 255, 0.08);
+    --agent-text: #f4f7fb;
+    --agent-muted: #9aa4b2;
+    --agent-accent: #62d6a6;
 }
 
 .gradio-container {
     max-width: none !important;
     min-height: 100vh;
     padding: 24px 32px 28px !important;
-    background: var(--gosim-bg) !important;
-    color: var(--gosim-text);
+    background: var(--agent-bg) !important;
+    color: var(--agent-text);
 }
 
-#gosim-shell {
+#agent-shell {
     max-width: 1680px;
     margin: 0 auto;
 }
@@ -69,7 +69,7 @@ CUSTOM_CSS = """
 
 .app-subtitle {
     margin-top: 8px !important;
-    color: var(--gosim-muted);
+    color: var(--agent-muted);
     font-size: 14px;
 }
 
@@ -81,7 +81,7 @@ CUSTOM_CSS = """
 
 .setup-card,
 .side-panel {
-    border: 1px solid var(--gosim-border-soft);
+    border: 1px solid var(--agent-border-soft);
     border-radius: 8px;
     background: rgba(23, 26, 32, 0.92);
     box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
@@ -140,51 +140,51 @@ CUSTOM_CSS = """
     border-radius: 6px !important;
 }
 
-.gosim-chatbot {
-    color: var(--gosim-text) !important;
+.agent-chatbot {
+    color: var(--agent-text) !important;
     min-height: 420px;
     background: transparent !important;
 }
 
-.gosim-chatbot,
-.gosim-chatbot * {
+.agent-chatbot,
+.agent-chatbot * {
     box-sizing: border-box;
 }
 
-.gosim-chatbot [class*="list"],
-.gosim-chatbot [class*="List"],
-.gosim-chatbot [class*="items"],
-.gosim-chatbot [class*="Items"],
-.gosim-chatbot [class*="message-list"],
-.gosim-chatbot [class*="Message-list"] {
+.agent-chatbot [class*="list"],
+.agent-chatbot [class*="List"],
+.agent-chatbot [class*="items"],
+.agent-chatbot [class*="Items"],
+.agent-chatbot [class*="message-list"],
+.agent-chatbot [class*="Message-list"] {
     background: transparent !important;
     border: 0 !important;
 }
 
-.gosim-chatbot [class*="bubble"],
-.gosim-chatbot [class*="Bubble"],
-.gosim-chatbot [class*="message"],
-.gosim-chatbot [class*="Message"],
-.gosim-chatbot [class*="item"],
-.gosim-chatbot [class*="Item"] {
+.agent-chatbot [class*="bubble"],
+.agent-chatbot [class*="Bubble"],
+.agent-chatbot [class*="message"],
+.agent-chatbot [class*="Message"],
+.agent-chatbot [class*="item"],
+.agent-chatbot [class*="Item"] {
     max-width: 100%;
     background: transparent !important;
     border: 0 !important;
     box-shadow: none !important;
 }
 
-.gosim-chatbot .ant-bubble-content,
-.gosim-chatbot [class*="bubble-content"],
-.gosim-chatbot [class*="Bubble-content"],
-.gosim-chatbot [class*="message-content"],
-.gosim-chatbot [class*="Message-content"],
-.gosim-chatbot [data-role] {
+.agent-chatbot .ant-bubble-content,
+.agent-chatbot [class*="bubble-content"],
+.agent-chatbot [class*="Bubble-content"],
+.agent-chatbot [class*="message-content"],
+.agent-chatbot [class*="Message-content"],
+.agent-chatbot [data-role] {
     max-width: min(78%, 780px);
     min-width: 44px;
     padding: 10px 14px;
     border: 0;
     border-radius: 8px;
-    color: var(--gosim-text) !important;
+    color: var(--agent-text) !important;
     line-height: 1.6;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -192,46 +192,46 @@ CUSTOM_CSS = """
     box-shadow: none !important;
 }
 
-.gosim-chatbot .ant-bubble-end .ant-bubble-content,
-.gosim-chatbot [class*="bubble-end"] [class*="content"],
-.gosim-chatbot [class*="Bubble-end"] [class*="content"],
-.gosim-chatbot [class*="user"] [class*="content"],
-.gosim-chatbot [data-role="user"] {
+.agent-chatbot .ant-bubble-end .ant-bubble-content,
+.agent-chatbot [class*="bubble-end"] [class*="content"],
+.agent-chatbot [class*="Bubble-end"] [class*="content"],
+.agent-chatbot [class*="user"] [class*="content"],
+.agent-chatbot [data-role="user"] {
     margin-left: auto;
     background: rgba(56, 158, 114, 0.74) !important;
     border: 0 !important;
     color: #f7fffb !important;
 }
 
-.gosim-chatbot .ant-bubble-start .ant-bubble-content,
-.gosim-chatbot [class*="bubble-start"] [class*="content"],
-.gosim-chatbot [class*="Bubble-start"] [class*="content"],
-.gosim-chatbot [class*="assistant"] [class*="content"],
-.gosim-chatbot [data-role="assistant"] {
+.agent-chatbot .ant-bubble-start .ant-bubble-content,
+.agent-chatbot [class*="bubble-start"] [class*="content"],
+.agent-chatbot [class*="Bubble-start"] [class*="content"],
+.agent-chatbot [class*="assistant"] [class*="content"],
+.agent-chatbot [data-role="assistant"] {
     margin-right: auto;
     background: rgba(34, 39, 47, 0.68) !important;
     border: 0 !important;
     color: #edf2f8 !important;
 }
 
-.gosim-chatbot [class*="tool"],
-.gosim-chatbot [class*="Tool"],
-.gosim-chatbot [class*="thought"],
-.gosim-chatbot [class*="Thought"] {
+.agent-chatbot [class*="tool"],
+.agent-chatbot [class*="Tool"],
+.agent-chatbot [class*="thought"],
+.agent-chatbot [class*="Thought"] {
     background: transparent !important;
     border: 0 !important;
     box-shadow: none !important;
 }
 
-.gosim-chatbot p,
-.gosim-chatbot span,
-.gosim-chatbot pre,
-.gosim-chatbot code {
+.agent-chatbot p,
+.agent-chatbot span,
+.agent-chatbot pre,
+.agent-chatbot code {
     color: inherit;
 }
 
-.gosim-chatbot pre,
-.gosim-chatbot code {
+.agent-chatbot pre,
+.agent-chatbot code {
     max-width: 100%;
     overflow-x: auto;
     white-space: pre-wrap;
@@ -239,11 +239,11 @@ CUSTOM_CSS = """
     background: rgba(0, 0, 0, 0.18) !important;
 }
 
-.gosim-chatbot details.tool-result-details {
+.agent-chatbot details.tool-result-details {
     margin-top: 10px;
 }
 
-.gosim-chatbot details.tool-result-details summary {
+.agent-chatbot details.tool-result-details summary {
     display: inline-flex;
     align-items: center;
     min-height: 30px;
@@ -255,7 +255,7 @@ CUSTOM_CSS = """
     user-select: none;
 }
 
-.gosim-chatbot details.tool-result-details pre {
+.agent-chatbot details.tool-result-details pre {
     margin-top: 8px;
 }
 
@@ -276,9 +276,9 @@ CUSTOM_CSS = """
 .gradio-container input,
 .gradio-container textarea,
 .gradio-container select {
-    border-color: var(--gosim-border) !important;
+    border-color: var(--agent-border) !important;
     background: #121414 !important;
-    color: var(--gosim-text) !important;
+    color: var(--agent-text) !important;
 }
 
 .gradio-container input[type="checkbox"] {
@@ -346,13 +346,13 @@ CUSTOM_CSS = """
 
 .gradio-container button.secondary,
 .gradio-container button[variant="secondary"] {
-    border-color: var(--gosim-border) !important;
+    border-color: var(--agent-border) !important;
     background: #242724 !important;
     color: #edf2f8 !important;
 }
 
 footer {
-    border-top: 1px solid var(--gosim-border-soft) !important;
+    border-top: 1px solid var(--agent-border-soft) !important;
     background: rgba(15, 17, 21, 0.86) !important;
 }
 
@@ -365,12 +365,12 @@ footer {
         min-width: 0;
     }
 
-    .gosim-chatbot .ant-bubble-content,
-    .gosim-chatbot [class*="bubble-content"],
-    .gosim-chatbot [class*="Bubble-content"],
-    .gosim-chatbot [class*="message-content"],
-    .gosim-chatbot [class*="Message-content"],
-    .gosim-chatbot [data-role] {
+    .agent-chatbot .ant-bubble-content,
+    .agent-chatbot [class*="bubble-content"],
+    .agent-chatbot [class*="Bubble-content"],
+    .agent-chatbot [class*="message-content"],
+    .agent-chatbot [class*="Message-content"],
+    .agent-chatbot [data-role] {
         max-width: 92%;
     }
 }
@@ -385,7 +385,7 @@ footer {
         padding: 14px;
     }
 
-    .gosim-chatbot {
+    .agent-chatbot {
         min-height: 340px;
     }
 }
@@ -416,11 +416,11 @@ def create_ui():
     globals.session_id = session_id
     
     with gr.Blocks(
-        title="GOSIM Infinigen Blender Agent",
+        title="Infinigen Blender Agent",
         css=CUSTOM_CSS,
-        elem_id="gosim-shell",
+        elem_id="agent-shell",
     ) as app:
-        gr.Markdown("## GOSIM Infinigen Blender Agent", elem_classes=["app-title"])
+        gr.Markdown("## Infinigen Blender Agent", elem_classes=["app-title"])
         gr.Markdown(
             "Control Blender / Infinigen scenes with LLM function calls",
             elem_classes=["app-subtitle"],

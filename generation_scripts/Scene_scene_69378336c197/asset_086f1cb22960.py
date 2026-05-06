@@ -5,11 +5,11 @@ Run inside Blender with the Infinigen addon loaded if you want to replay it.
 import json
 
 GENERATION = {
-  "object_id": "asset_f4f0c4f9219d",
-  "asset_id": "asset_f4f0c4f9219d",
+  "object_id": "asset_086f1cb22960",
+  "asset_id": "asset_086f1cb22960",
   "category": "chair",
   "factory_path": "infinigen.assets.objects.seating.chairs.ChairFactory",
-  "seed": 0,
+  "seed": 1,
   "scale": 1.0,
   "location": [
     0.0,
@@ -18,7 +18,7 @@ GENERATION = {
   ],
   "material_color": null,
   "source_prompt": null,
-  "scene": "Scene_scene_e67049f24fd6"
+  "scene": "Scene_scene_69378336c197"
 }
 
 def replay(client):

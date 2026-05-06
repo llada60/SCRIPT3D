@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .agent import GosimAgent
+from .agent import InfinigenAgent
 from .client import BlenderClient
 from .config import get_settings
 
@@ -19,7 +19,7 @@ def main() -> None:
 
     settings = get_settings()
     client = BlenderClient(settings)
-    agent = GosimAgent(client)
+    agent = InfinigenAgent(client)
 
     def chat(message: str, history: list[dict[str, str]]) -> tuple[list[dict[str, str]], str | None, str]:
         try:
@@ -50,8 +50,8 @@ def main() -> None:
         result = client.render_scene(Path(path))
         return result["path"], json.dumps(result, ensure_ascii=False, indent=2)
 
-    with gr.Blocks(title="GOSIM Infinigen Blender Agent") as demo:
-        gr.Markdown("# GOSIM Infinigen Blender Agent")
+    with gr.Blocks(title="Infinigen Blender Agent") as demo:
+        gr.Markdown("# Infinigen Blender Agent")
         with gr.Row():
             with gr.Column(scale=2):
                 chatbot = gr.Chatbot(type="messages", height=520)

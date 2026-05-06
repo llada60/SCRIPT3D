@@ -38,7 +38,7 @@ env/
 # 渲染结果
 renders/
 outputs/
-gosim_scene_index.json
+scene_index.json
 *.blend1
 *.blend2
 .pytest_cache/

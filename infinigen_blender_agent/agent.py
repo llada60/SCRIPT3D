@@ -29,7 +29,7 @@ class AgentResult:
     preview_path: str | None = None
 
 
-class GosimAgent:
+class InfinigenAgent:
     def __init__(self, client: BlenderClient | None = None, planner: RulePlanner | None = None):
         self.client = client or BlenderClient()
         self.planner = planner or make_planner()
