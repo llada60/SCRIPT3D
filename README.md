@@ -787,3 +787,10 @@ demo-ready
 ```
 
 This makes SCRIPT3D more than a text-to-3D generator. It is a foundation for controllable, script-backed 3D creation.
+
+## Acknowledgements
+
+Thanks to the following GitHub projects:
+
+1. [Infinigen](https://github.com/princeton-vl/infinigen)
+2. [LLM-Blender-Agent](https://github.com/saofund/LLM-Blender-Agent)
