@@ -11,7 +11,8 @@ Instead of producing a one-time black-box mesh, SCRIPT3D turns natural-language 
 
 ## Demo
 
-<video controls src="pic_readme/SCRIPT3D.mp4" title="Title"></video>
+<video src="./pic_readme/SCRIPT3D.mp4" controls></video>
+
 
 Youtube link: https://youtu.be/YtQ2YAHLNBc
 
