@@ -106,137 +106,129 @@ def create_chat_tab(session_id_param):
     )
     
     with ms.Application(), antdx.XProvider():
-        # 步骤1和步骤2放在整行
-        with gr.Row(elem_classes=["setup-grid"]):
-            with gr.Column(scale=1, elem_classes=["setup-card"]):
-                gr.Markdown("## Step 1: Connect to Blender")
-                
-                # 主机和端口放在同一行
+        with gr.Column(elem_classes=["setup-card", "unified-setup-card"]):
+            blender_host = gr.Textbox(value="localhost", visible=False)
+            blender_port = gr.Number(value=9876, visible=False)
+            initialization_status = gr.Textbox(visible=False)
+
+            with gr.Row(elem_classes=["model-row"]):
+                model_selector = gr.Dropdown(
+                    label="Code Generator Model",
+                    choices=available_models,
+                    value=default_code_generator_model
+                    if default_code_generator_model in available_models
+                    else available_models[0],
+                )
+                verifier_model_selector = gr.Dropdown(
+                    label="Visual Verifier Model",
+                    choices=available_models,
+                    value=default_visual_verifier_model
+                    if default_visual_verifier_model in available_models
+                    else available_models[0],
+                )
+
+            with gr.Row(elem_classes=["connect-row"]):
+                connect_btn = gr.Button("Connect Blender&Agent", variant="primary", scale=1)
+                connection_status = gr.Textbox(
+                    label="Connection Status",
+                    value="Not connected",
+                    interactive=False,
+                    scale=3,
+                )
+
+            with gr.Row(elem_classes=["setup-links"]):
+                advanced_settings_btn = gr.Button("Advanced Settings", variant="secondary", size="sm")
+                help_btn = gr.Button("Add-on Help", variant="secondary", size="sm")
+
+            with Modal(visible=False) as addon_help_modal:
+                gr.Markdown("## How to Start the Blender Add-on")
+                gif_path = os.path.join("asserts", "guide", "how_to_start_addon.gif")
+                gr.Image(value=gif_path, show_label=False)
+                close_btn = gr.Button("Close")
+
+            help_btn.click(lambda: Modal(visible=True), None, addon_help_modal)
+            close_btn.click(lambda: Modal(visible=False), None, addon_help_modal)
+
+            with Modal(visible=False) as advanced_settings_modal:
+                gr.Markdown("## Advanced Settings")
+                function_checkboxes = gr.CheckboxGroup(
+                    label="Enabled Tools",
+                    choices=["all"],
+                    value=["all"]
+                )
+
                 with gr.Row():
-                    blender_host = gr.Textbox(label="Blender Host", value="localhost", scale=3)
-                    blender_port = gr.Number(label="Blender Port", value=9876, scale=1)
-                
-                # 状态和按钮放在同一行，按钮在右侧
-                with gr.Row(elem_classes=["secondary-actions"]):
-                    connection_status = gr.Textbox(label="Connection Status", interactive=False, scale=3)
-                    
-                    # 使用列来垂直排列两个按钮
-                    with gr.Column(scale=1):
-                        connect_btn = gr.Button("Connect Blender", variant="primary")
-                        help_btn = gr.Button("Start Add-on Help", variant="secondary", size="md")
-                
-                # 创建模态窗用于显示GIF，初始设置为不可见
-                with Modal(visible=False) as addon_help_modal:
-                    gr.Markdown("## How to Start the Blender Add-on")
-                    gif_path = os.path.join("asserts", "guide", "how_to_start_addon.gif")
-                    gr.Image(value=gif_path, show_label=False)
-                    close_btn = gr.Button("Close")
-                
-                # 设置帮助按钮点击事件，打开模态窗
-                help_btn.click(lambda: Modal(visible=True), None, addon_help_modal)
-                # 设置关闭按钮点击事件，关闭模态窗
-                close_btn.click(lambda: Modal(visible=False), None, addon_help_modal)
-            
-            with gr.Column(scale=1, elem_classes=["setup-card"]):
-                gr.Markdown("## Step 2: Initialize LLM Models")
+                    auto_update_info = gr.Checkbox(label="Auto-refresh Scene Info", value=True)
+                    auto_render = gr.Checkbox(label="Auto Render", value=True)
+
+                include_in_context = gr.Checkbox(
+                    label="Include scene info and render output in LLM context",
+                    value=True,
+                    info="When enabled, the current scene state is included in the LLM context."
+                )
+
                 with gr.Row():
-                    model_selector = gr.Dropdown(
-                        label="Code Generator Model",
-                        choices=available_models,
-                        value=default_code_generator_model
-                        if default_code_generator_model in available_models
-                        else available_models[0],
+                    enable_visual_verifier = gr.Checkbox(
+                        label="Enable Visual Verifier",
+                        value=True,
+                        info="After each auto render, verify prompt consistency, basic physics, and practical plausibility.",
                     )
-                    verifier_model_selector = gr.Dropdown(
-                        label="Visual Verifier Model",
-                        choices=available_models,
-                        value=default_visual_verifier_model
-                        if default_visual_verifier_model in available_models
-                        else available_models[0],
-                    )
-                
-                # 状态和按钮放在同一行，按钮在右侧
-                with gr.Row(elem_classes=["secondary-actions"]):
-                    initialization_status = gr.Textbox(label="Initialization Status", interactive=False, scale=3)
-                    
-                    # 使用列来垂直排列两个按钮
-                    with gr.Column(scale=1):
-                        initialize_btn = gr.Button("Initialize Agent", variant="primary")
-                        advanced_settings_btn = gr.Button("Advanced Settings", variant="secondary", size="md")
-                
-                # 创建高级设置的模态窗口
-                with Modal(visible=False) as advanced_settings_modal:
-                    gr.Markdown("## Advanced Settings")
-                    function_checkboxes = gr.CheckboxGroup(
-                        label="Enabled Tools",
-                        choices=["all"],
-                        value=["all"]
-                    )
-                    
-                    with gr.Row():
-                        auto_update_info = gr.Checkbox(label="Auto-refresh Scene Info", value=True)
-                        auto_render = gr.Checkbox(label="Auto Render", value=True)
-                    
-                    include_in_context = gr.Checkbox(
-                        label="Include scene info and render output in LLM context",
-                        value=True,  # 默认勾选
-                        info="When enabled, the current scene state is included in the LLM context."
+                    visual_verifier_iterations = gr.Slider(
+                        label="Visual Verifier Max Iterations",
+                        minimum=1,
+                        maximum=5,
+                        step=1,
+                        value=2,
+                        info="Stops early when the verifier considers the render close enough to the goal.",
                     )
 
-                    with gr.Row():
-                        enable_visual_verifier = gr.Checkbox(
-                            label="Enable Visual Verifier",
-                            value=True,
-                            info="After each auto render, verify prompt consistency, basic physics, and practical plausibility.",
-                        )
-                        visual_verifier_iterations = gr.Slider(
-                            label="Visual Verifier Max Iterations",
-                            minimum=1,
-                            maximum=5,
-                            step=1,
-                            value=2,
-                            info="Stops early when the verifier considers the render close enough to the goal.",
-                        )
-                    
-                    close_advanced_settings_btn = gr.Button("Close")
-                
-                # 设置高级设置按钮点击事件
-                advanced_settings_btn.click(lambda: Modal(visible=True), None, advanced_settings_modal)
-                # 设置关闭按钮点击事件
-                close_advanced_settings_btn.click(lambda: Modal(visible=False), None, advanced_settings_modal)
-        
-        gr.Markdown("## Step 3: Chat with Blender", elem_classes=["section-title"])
+                close_advanced_settings_btn = gr.Button("Close")
+
+            advanced_settings_btn.click(lambda: Modal(visible=True), None, advanced_settings_modal)
+            close_advanced_settings_btn.click(lambda: Modal(visible=False), None, advanced_settings_modal)
         
         # 聊天界面部分
         with gr.Row(elem_classes=["workspace-grid"]):
 
             # 左侧：聊天界面
-            with gr.Column(scale=2, elem_classes=["chat-panel"]):
+            with gr.Column(scale=6, elem_classes=["chat-panel"]):
                 chatbot, chat_input, clear_btn = create_chat_interface()
                 
             # 右侧：显示区域
-            with gr.Column(scale=1, elem_classes=["side-panel"]):
-                scene_info = gr.Textbox(
-                    label="Scene Info",
-                    interactive=False,
-                    lines=12,
-                    elem_classes=["scene-info"],
-                )
-                render_image = gr.Image(
-                    label="Render Result",
-                    interactive=False,
-                    height=360,
-                    elem_classes=["render-preview"],
-                )
-                
-                with gr.Row(elem_classes=["primary-actions", "action-row"]):
-                    render_btn = gr.Button("Render Now")
-                    update_info_btn = gr.Button("Refresh Scene Info")
+            with gr.Column(scale=4, elem_classes=["side-panel"]):
+                with gr.Column(elem_classes=["side-stack"]):
+                    render_image = gr.Image(
+                        label="Render Result",
+                        value=None,
+                        interactive=False,
+                        height=320,
+                        elem_classes=["render-preview"],
+                    )
+                    scene_info = gr.Textbox(
+                        label="Scene Info",
+                        value="Connect Blender&Agent to load scene info.",
+                        interactive=False,
+                        lines=5,
+                        elem_classes=["scene-info"],
+                    )
+
+                    with gr.Row(elem_classes=["primary-actions", "action-row"]):
+                        render_btn = gr.Button("Render Now")
+                        update_info_btn = gr.Button("Refresh Scene Info")
     
     
         # 手动渲染按钮
+        def render_now_for_ui():
+            image_path, render_error = render_scene_and_return_image(
+                globals.session_id,
+                globals.blender_clients,
+            )
+            if render_error:
+                return gr.update(value=None)
+            return image_path if image_path else gr.update(value=None)
+
         render_btn.click(
-            fn=lambda: render_scene_and_return_image(globals.session_id, globals.blender_clients)[0],
+            fn=render_now_for_ui,
             inputs=None,
             outputs=render_image
         )
@@ -248,9 +240,13 @@ def create_chat_tab(session_id_param):
             outputs=scene_info
         )
         
-        # 连接按钮事件
-        def connect_and_refresh(host, port, should_render):
-            status = connect_to_blender(host, port, globals.blender_clients, globals.session_id)
+        # 连接 Blender 并初始化 Agent
+        def connect_blender_and_agent(host, port, model, verifier_model, should_render):
+            from ui.utils.llm_utils import initialize_agent, format_functions_for_display
+
+            blender_status = connect_to_blender(host, port, globals.blender_clients, globals.session_id)
+            agent_status = initialize_agent(globals.session_id, model, 0.7, verifier_model)
+
             info_text, _scene_data = get_scene_info(globals.session_id, globals.blender_clients)
             image_path = None
             if should_render:
@@ -258,32 +254,34 @@ def create_chat_tab(session_id_param):
                     globals.session_id,
                     globals.blender_clients,
                 )
-            return status, info_text, image_path
+            image_output = image_path if image_path else gr.update(value=None)
+
+            blender_ok = blender_status.startswith("Connected to Blender")
+            agent_ok = agent_status.startswith("Initialization successful")
+            if blender_ok and agent_ok:
+                combined_status = "Blender connected. Agent initialized."
+            elif blender_ok and not agent_ok:
+                combined_status = f"Blender connected. Agent failed: {agent_status}"
+            elif not blender_ok and agent_ok:
+                combined_status = f"Blender failed: {blender_status} Agent initialized without Blender."
+            else:
+                combined_status = f"Blender failed: {blender_status} Agent failed: {agent_status}"
+
+            formatted_functions = ["all"] + format_functions_for_display(globals.session_id, globals.agents)
+            return (
+                combined_status,
+                agent_status,
+                info_text,
+                image_output,
+                gr.update(choices=formatted_functions, value=["all"]),
+            )
 
         connect_btn.click(
-            fn=connect_and_refresh,
-            inputs=[blender_host, blender_port, auto_render],
-            outputs=[connection_status, scene_info, render_image]
+            fn=connect_blender_and_agent,
+            inputs=[blender_host, blender_port, model_selector, verifier_model_selector, auto_render],
+            outputs=[connection_status, initialization_status, scene_info, render_image, function_checkboxes]
         )
-        
-        # 初始化按钮事件
-        def init_and_update_functions(model, verifier_model):
-            from ui.utils.llm_utils import initialize_agent, format_functions_for_display
-            
-            # 使用默认温度0.7
-            temp = 0.7
-            result = initialize_agent(globals.session_id, model, temp, verifier_model)
-            
-            # 更新可用函数列表
-            formatted_functions = ["all"] + format_functions_for_display(globals.session_id, globals.agents)
-            
-            yield result, gr.update(choices=formatted_functions, value=["all"])
-        
-        initialize_btn.click(
-            fn=init_and_update_functions,
-            inputs=[model_selector, verifier_model_selector],
-            outputs=[initialization_status, function_checkboxes]
-        )
+        initialize_btn = connect_btn
         
         # 添加函数选择器的更新逻辑
         def update_function_selection(selected_functions):

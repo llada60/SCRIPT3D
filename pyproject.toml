@@ -26,8 +26,13 @@ llm = [
 ]
 
 [project.scripts]
+<<<<<<< HEAD
 infinigen-agent = "infinigen_blender_agent.cli:main"
 infinigen-agent-ui = "app:fail_safe_main"
+=======
+gosim-agent = "gosim_blender_agent.cli:main"
+gosim-agent-ui = "ui.main:main"
+>>>>>>> refs/remotes/origin/main
 
 [tool.ruff]
 line-length = 100
