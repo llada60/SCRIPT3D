@@ -1,5 +1,7 @@
 # SCRIPT3D: Script-Backed, Controllable, and Reproducible 3D Asset Generation in Blender
 
+<img src="pic_readme/icon.jpg" width="200" align="right" alt="SCRIPT3D Icon">
+
 **SCRIPT3D** is a code-based multi-agent system for **controllable 3D asset generation and editing in Blender**.
 
 Instead of producing a one-time black-box mesh, SCRIPT3D turns natural-language requests into **explicit Python generation scripts**, executable Blender operations, and persistent asset metadata. Every generated object can be inspected, traced, regenerated, edited, and reinserted into the scene with spatial consistency.
