@@ -399,7 +399,6 @@ Example:
 
 ```text
 what objects are in the scene?
-查看场景里有哪些物体
 ```
 
 CLI:
@@ -462,7 +461,6 @@ Example:
 
 ```text
 move the bed right 0.3 meters
-把桌子放大 1.2
 rotate the chair 90 degrees
 make the cabinet black
 delete the apple
