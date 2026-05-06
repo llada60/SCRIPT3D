@@ -1,6 +1,15 @@
-# SCRIPT3D: Script-Backed, Controllable, and Reproducible 3D Asset Generation in Blender
+# SCRIPT3D: 3D Asset-Controlled Reproducible Pipeline and Tooling
 
-<img src="pic_readme/icon.jpg" width="200" align="right" alt="SCRIPT3D Icon">
+<div align="center">
+
+<table>
+    <th><a href="https://youtu.be/YtQ2YAHLNBc"> 🎥 Video</a></th>
+    <th> <a href="./readme_assets/presentation.pptx">📊 Slide</a></th>
+</table>
+
+</div>
+
+<img src="readme_assets/icon.jpg" width="200" align="right" alt="SCRIPT3D Icon">
 
 **SCRIPT3D** is a code-based multi-agent system for **controllable 3D asset generation and editing in Blender**.
 
@@ -9,14 +18,9 @@ Instead of producing a one-time black-box mesh, SCRIPT3D turns natural-language 
 > **Core idea:** Treat every generated 3D asset not as a static mesh, but as a reproducible, script-backed object with metadata.
 
 
-## Demo
-
-<video src="./pic_readme/SCRIPT3D.mp4" controls></video>
 
 
-Youtube link: https://youtu.be/YtQ2YAHLNBc
 
----
 
 ## Table of Contents
 
@@ -39,7 +43,7 @@ Youtube link: https://youtu.be/YtQ2YAHLNBc
 ## Key Innovation
 
 <p align="center">
-  <img src="pic_readme/motivation.png" alt="SCRIPT3D Motivation">
+  <img src="readme_assets/motivation.png" alt="SCRIPT3D Motivation">
 </p>
 
 Most text-to-3D systems follow this pattern:
@@ -88,7 +92,7 @@ This makes 3D generation **inspectable, repeatable, editable, and scene-aware**.
 ## Highlights
 
 <p align="center">
-  <img src="pic_readme/highlight.png" alt="SCRIPT3D Highlights">
+  <img src="readme_assets/highlight.png" alt="SCRIPT3D Highlights">
 </p>
 
 SCRIPT3D supports:
@@ -108,7 +112,7 @@ SCRIPT3D supports:
 ## System Architecture
 
 <p align="center">
-  <img src="pic_readme/teaser.png" alt="SCRIPT3D System Architecture">
+  <img src="readme_assets/teaser.png" alt="SCRIPT3D System Architecture">
 </p>
 
 ### Agent System
@@ -574,17 +578,19 @@ SCRIPT3D then:
 
 ### 1. Install
 
-Python 3.11 is recommended.
 
 ```bash
-cd /path/to/infinigen-blender-agent
-python3 -m pip install -r requirements.txt
+cd /path/to/SCRIPT3D
+conda create -n script3d python=3.11 -y
+conda activate script3d
+pip install -r requirements.txt
 ```
 
-Editable install:
+Install Blender dependencies:
 
 ```bash
-python3 -m pip install -e ".[ui,llm]"
+cd /path/to/SCRIPT3D/third_party/infinigen
+bash scripts/install/interactive_blender.sh
 ```
 
 ---
@@ -627,7 +633,7 @@ The Code Generator Agent and Visual Verifier Agent can use different models.
 ### 1. Start the Blender Addon Agent
 
 ```bash
-cd /path/to/infinigen-blender-agent
+cd /path/to/SCRIPT3D
 bash scripts/start_blender_agent.sh
 ```
 
@@ -648,7 +654,7 @@ Default socket:
 In another terminal:
 
 ```bash
-cd /path/to/infinigen-blender-agent
+cd /path/to/SCRIPT3D
 bash scripts/start_ui.sh
 ```
 
@@ -759,7 +765,7 @@ SCRIPT3D/
 ├── third_party/
 │   └── infinigen/                        # Vendored Infinigen dependency
 │
-├── pic_readme/                           # README images and videos
+├── readme_assets/                           # README images and videos
 ├── asserts/                              # UI screenshots/icons
 └── addon.py                              # Addon convenience entry point
 ```
