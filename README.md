@@ -11,6 +11,8 @@ Instead of producing a one-time black-box mesh, SCRIPT3D turns natural-language 
 
 <video controls src="SCRIPT3D.mp4" title="Title"></video>
 
+Youtube link: https://youtu.be/YtQ2YAHLNBc
+
 ---
 
 ## Table of Contents
@@ -302,7 +304,6 @@ generation_scripts/
   Scene_scene_081397bb4e26/
     asset_5dc67a6e18be.py
     asset_babe3c928956.py
-    asset_64e1196bde0e.py
 ```
 
 Each script records the factory path, category, seed, location, scale, edit
