@@ -7,7 +7,7 @@ Instead of producing a one-time black-box mesh, SCRIPT3D turns natural-language 
 > **Core idea:** Treat every generated 3D asset not as a static mesh, but as a reproducible, script-backed object with metadata.
 
 
-## Video Demo
+## Demo
 
 <video controls src="SCRIPT3D.mp4" title="Title"></video>
 
@@ -108,20 +108,31 @@ SCRIPT3D supports:
 
 ### Agent System
 
-#### 1. Code Generator Agent
+SCRIPT3D currently exposes two planning paths that share the same Blender command
+surface:
+
+- an LLM function-calling path used by the Gradio UI,
+- a deterministic rule-planner path used by the CLI and useful for offline demos.
+
+Both paths send structured JSON commands to the Blender addon. Neither path sends
+arbitrary `bpy` code to Blender.
+
+#### 1. Code Generator Agent / UI Agent
 
 **Location:** `src/agent/agent.py`
 
-The Code Generator Agent converts user instructions into safe, structured tool calls.
+The Code Generator Agent adapts the original LLM-Blender-Agent workflow to
+Infinigen scene generation and editing. It gives the selected LLM a fixed list of
+Blender/Infinigen tools and dispatches returned function calls through the
+Blender client.
 
 It is responsible for:
 
-- understanding generation and editing prompts,
-- selecting whitelisted tools,
-- planning multi-step operations,
-- avoiding unrequested objects,
-- avoiding arbitrary unsafe Blender Python execution,
-- streaming progress to the UI.
+- converting natural-language requests into whitelisted function calls,
+- enforcing the physical-rules prompt used for placement and scale sanity,
+- routing generation, editing, placement, camera, render, and save operations,
+- streaming tool progress and results into the UI,
+- optionally using rendered-image feedback from the Visual Verifier Agent.
 
 Example tool choices include:
 
@@ -129,14 +140,69 @@ Example tool choices include:
 add_infinigen_asset
 edit_generated_asset
 place_on
+place_near
+apply_physics_rules
+adjust_camera_from_render
 render_scene
 ```
 
-This keeps the system controllable while still allowing flexible natural-language interaction.
+This keeps interaction flexible while preserving a narrow, auditable execution
+surface.
 
 ---
 
-#### 2. Blender Addon Agent
+#### 2. Rule Planner / CLI Agent
+
+**Locations:**
+
+```text
+infinigen_blender_agent/planner.py
+infinigen_blender_agent/agent.py
+infinigen_blender_agent/cli.py
+```
+
+The Rule Planner provides a deterministic fallback path for demos, tests, and
+environments without an LLM. It recognizes a practical set of English and Chinese
+commands and converts them into the same `Action` schema used by the client.
+
+It supports:
+
+- scene inspection and indexing,
+- opening and saving `.blend` files,
+- asset generation,
+- `\editing`-prefixed generated-asset edits,
+- movement, scale, rotation, deletion, and material changes,
+- `place_on`, `place_near`, and `place_against_wall`,
+- automatic `apply_physics_rules` after spatial edits,
+- render and camera-framing requests.
+
+The CLI entry point uses this path through:
+
+```text
+python3 -m infinigen_blender_agent.cli chat "add a desk lamp on the desk"
+```
+
+---
+
+#### 3. Optional JSON LLM Planner
+
+**Location:** `infinigen_blender_agent/llm_planner.py`
+
+This planner is an OpenAI-compatible JSON planner for the same CLI-side action
+schema. It is configured through environment variables:
+
+```text
+INFINIGEN_AGENT_LLM_BASE_URL
+INFINIGEN_AGENT_LLM_API_KEY
+INFINIGEN_AGENT_LLM_MODEL
+```
+
+If the remote planner fails or returns unusable output, it falls back to the
+deterministic `RulePlanner`.
+
+---
+
+#### 4. Blender Addon Agent
 
 **Location:** `blender_addon/infinigen_agent_addon.py`
 
@@ -149,16 +215,18 @@ It is responsible for:
 - executing operations on the Blender main thread,
 - invoking Infinigen procedural asset factories,
 - generating Blender objects,
-- applying materials, scaling, rotation, placement, and deletion,
+- applying materials, scaling, rotation, placement, deletion, and physics cleanup,
 - writing generation scripts,
 - maintaining `scene_index.json`,
-- rendering the scene.
+- rendering the scene,
+- auto-adjusting cameras from transparent-mask renders,
+- exposing live run status and cancellation hooks to the UI.
 
 This agent is the bridge between high-level agent planning and real Blender execution.
 
 ---
 
-#### 3. Visual Verifier Agent
+#### 5. Visual Verifier Agent
 
 **Location:** `src/agent/visual_verifier.py`
 
@@ -187,29 +255,7 @@ This enables iterative improvement instead of one-shot generation.
 
 ---
 
-#### 4. Rule Planner / CLI Agent
-
-**Locations:**
-
-```text
-infinigen_blender_agent/planner.py
-infinigen_blender_agent/agent.py
-```
-
-The Rule Planner provides a deterministic fallback path.
-
-It can parse a small set of English and Chinese commands without requiring an LLM. It uses the same socket protocol and tool schema as the UI agent.
-
-This improves:
-
-- demo stability,
-- testability,
-- reproducibility,
-- robustness when LLM output is unavailable or unreliable.
-
----
-
-#### 5. Camera Agent
+#### 6. Camera Agent
 
 **Location:** `blender_addon/infinigen_agent_addon.py`
 
@@ -233,74 +279,99 @@ This helps ensure that generated assets are not only correct, but also clearly v
 SCRIPT3D combines several technical components into a unified pipeline:
 
 ```text
-LLM planning
-structured tool calling
-Blender socket communication
-Infinigen procedural generation
-Python script generation
-scene graph indexing
-asset metadata persistence
-replacement-based editing
-render-based visual verification
-automatic camera adjustment
-CLI and UI control paths
+natural-language request
+  -> LLM tool-call planner or deterministic rule planner
+  -> typed Action / JSON command
+  -> BlenderClient socket request
+  -> Blender addon command handler
+  -> Infinigen factory or bpy scene operation
+  -> asset metadata + generation script
+  -> scene_index.json
+  -> render / camera adjustment / optional visual verification
 ```
 
 ### Script-Backed Generation
 
-Every generated asset is backed by a Python script.
+Every generated Infinigen asset is backed by a Python script written by the
+Blender addon.
 
 Instead of only saving a mesh, SCRIPT3D saves the process that created the mesh.
 
 ```text
 generation_scripts/
-  apple_001.py
-  desk_002.py
-  side_table_003.py
+  Scene_scene_081397bb4e26/
+    asset_5dc67a6e18be.py
+    asset_babe3c928956.py
+    asset_64e1196bde0e.py
 ```
 
-This makes asset generation easier to debug, replay, and modify.
+Each script records the factory path, category, seed, location, scale, edit
+prompt, and source prompt needed to respawn a compatible asset.
 
 ---
 
 ### Scene Indexing
 
-SCRIPT3D maintains a structured scene index:
+SCRIPT3D maintains a structured scene index next to the current `.blend` file by
+default:
 
 ```json
 {
-  "object_id": "desk_002",
+  "object_id": "asset_5dc67a6e18be",
+  "root_name": "agent_asset_desk_5dc67a6e18be",
   "category": "desk",
-  "factory": "DeskFactory",
-  "seed": 12,
-  "dimensions": [1.4, 0.7, 0.75],
+  "factory": "infinigen.assets.objects.tables.desk.SimpleDeskFactory",
+  "object_names": ["agent_asset_desk_5dc67a6e18be"],
   "location": [0.0, 0.0, 0.75],
+  "dimensions": [1.4, 0.7, 0.75],
   "materials": ["wood"],
-  "source_prompt": "add a desk",
-  "script_path": "generation_scripts/desk_002.py"
+  "relations": [],
+  "generation": {
+    "seed": 0,
+    "source_prompt": "add a desk",
+    "edit_prompt": "",
+    "script_path": "generation_scripts/Scene_scene_081397bb4e26/asset_5dc67a6e18be.py"
+  }
 }
 ```
 
-The scene index gives the agent a reliable handle for later edits.
+The index gives planners a stable handle for semantic lookup, spatial placement,
+replacement editing, and render targeting.
 
 ---
 
 ### Record-Backed Editing
 
-Editing is performed using stored generation records.
+Generated-asset editing is performed through stored generation records.
 
 ```text
-editing prompt
+\editing prompt
   -> target resolution
   -> retrieve asset record
-  -> regenerate or modify compatible asset
-  -> preserve position and scale
-  -> replace old object
+  -> respawn from original factory
+  -> apply supported edit parameters
+  -> align replacement to old bounding box
+  -> remove old object group
   -> update scene index
   -> render and verify
 ```
 
-This is more reliable than directly editing arbitrary mesh geometry without knowing its origin.
+This is more reliable than editing arbitrary mesh geometry without knowing its
+origin. Current edits focus on reproducible replacement, material/color changes,
+and preserving size and position.
+
+---
+
+### Physics and Placement Rules
+
+The planning and execution layers include explicit spatial rules:
+
+- furniture and rugs are kept on the floor unless explicitly placed elsewhere,
+- fruit and lamps stay at realistic small-object scale,
+- `place_on` aligns an object with a support surface such as a tabletop or chair seat,
+- `place_near` places objects beside a target with a gap,
+- `place_against_wall` uses room/wall information when available,
+- `apply_physics_rules` corrects common floating/support errors after spatial edits.
 
 ---
 
@@ -318,7 +389,38 @@ This improves completeness and demo reliability.
 
 ## Supported Workflows
 
-### Generation
+### 1. Inspect and Index a Scene
+
+SCRIPT3D can connect to a running Blender session, inspect objects, and rebuild
+the semantic scene index.
+
+Example:
+
+```text
+what objects are in the scene?
+查看场景里有哪些物体
+```
+
+CLI:
+
+```bash
+python3 -m infinigen_blender_agent.cli index
+```
+
+### 2. Open, Save, and Render `.blend` Files
+
+The agent can open existing Blender files, save the current scene, and render
+preview images.
+
+Example:
+
+```text
+open /absolute/path/to/scene.blend
+render preview
+save scene
+```
+
+### 3. Generate Infinigen Assets
 
 Generation prompts create new assets.
 
@@ -330,7 +432,10 @@ add a desk lamp on the desk
 add a strawberry next to the apple
 ```
 
-### Editing
+Generated assets are inserted through Infinigen factories and tagged with asset
+metadata, generation scripts, and scene-index entries.
+
+### 4. Edit Generated Assets
 
 Editing prompts must start with:
 
@@ -345,6 +450,47 @@ Example:
 \editing make the apple green and put it on the table
 \editing replace the side table with a coffee table
 ```
+
+The edit path resolves the target from `scene_index.json`, respawns a compatible
+asset from the recorded factory, applies supported edits, and preserves the old
+asset's placement and size when requested.
+
+### 5. Move, Scale, Rotate, Delete, and Change Materials
+
+Example:
+
+```text
+move the bed right 0.3 meters
+把桌子放大 1.2
+rotate the chair 90 degrees
+make the cabinet black
+delete the apple
+```
+
+### 6. Spatial Placement
+
+Example:
+
+```text
+put the lamp on the desk
+place the strawberry near the apple
+put the sofa against the wall
+```
+
+These map to dedicated placement tools instead of raw coordinates when possible.
+
+### 7. Camera Framing and Visual Verification
+
+Example:
+
+```text
+center the camera on the desk
+adjust the view so the apple is visible
+```
+
+The addon can render a transparent mask, compute the subject bounding box, adjust
+the camera, and produce a final preview render. The UI-side agent can also invoke
+the Visual Verifier Agent to check rendered outputs and request corrections.
 
 ---
 
@@ -380,22 +526,23 @@ pineapple, starfruit, strawberry, compositional_fruit
 User prompt:
 
 ```text
-add a desk with a lamp on it
+add a desk and put a desk lamp on it
 ```
 
 SCRIPT3D performs:
 
 ```text
-1. Parse prompt
-2. Plan required assets
-3. Generate desk through Infinigen factory
-4. Generate lamp through Infinigen factory
-5. Place lamp on desk
-6. Save generation scripts
-7. Write scene_index.json
-8. Render scene
-9. Verify object visibility and placement
-10. Adjust camera if needed
+1. The planner resolves "desk" and "desk lamp" to supported asset categories.
+2. It emits add_infinigen_asset for the desk factory.
+3. It emits add_infinigen_asset for the desk_lamp factory.
+4. It emits place_on to align the lamp to the desk support surface.
+5. The Blender client sends each command over the JSON socket.
+6. The addon spawns each asset on Blender's main thread.
+7. The addon tags root objects with object_id, category, factory, seed, and prompt metadata.
+8. The addon writes generation scripts under generation_scripts/.
+9. apply_physics_rules corrects common support/floating issues.
+10. rebuild_scene_index writes scene_index.json with dimensions, materials, relations, and generation metadata.
+11. render_scene optionally runs camera auto-adjustment and writes a preview image.
 ```
 
 Later, the user asks:
@@ -407,13 +554,16 @@ Later, the user asks:
 SCRIPT3D then:
 
 ```text
-1. Finds the existing desk in scene_index.json
-2. Reads its generation record
-3. Applies the requested material edit
-4. Preserves desk size and position
-5. Updates metadata
-6. Renders the edited scene
-7. Verifies the result
+1. The planner detects the \editing prefix.
+2. It emits edit_generated_asset with target="desk", prompt="make the desk marble", and color="marble".
+3. The addon resolves the desk through scene_index.json.
+4. It reads the stored factory, seed, source prompt, and generation script path.
+5. It respawns a compatible replacement asset from the original factory.
+6. It applies the marble material edit.
+7. It aligns the replacement to the old asset's bounding box.
+8. It removes the old generated object group.
+9. It writes a new generation script and refreshes scene_index.json.
+10. The scene can be rendered and visually verified again.
 ```
 
 ---
@@ -548,32 +698,68 @@ python3 -m infinigen_blender_agent.cli generate-bedroom \
 
 ```text
 SCRIPT3D/
-├── blender_addon/
-│   └── infinigen_agent_addon.py
+├── README.md
+├── pyproject.toml
+├── requirements.txt
+├── config.json
+├── scene.blend
 │
-├── src/
-│   └── agent/
-│       ├── agent.py
-│       └── visual_verifier.py
+├── blender_addon/
+│   └── infinigen_agent_addon.py          # Blender socket server and command executor
 │
 ├── infinigen_blender_agent/
-│   ├── agent.py
-│   ├── planner.py
-│   └── cli.py
+│   ├── agent.py                          # CLI/offline agent orchestration
+│   ├── planner.py                        # Deterministic English/Chinese rule planner
+│   ├── llm_planner.py                    # Optional OpenAI-compatible JSON planner
+│   ├── client.py                         # JSON socket client
+│   ├── protocol.py                       # Request/response encoding
+│   ├── asset_registry.py                 # Category, factory, alias, and material registry
+│   ├── infinigen_runner.py               # Out-of-process Infinigen scene generation
+│   ├── cli.py                            # Command-line entry point
+│   └── app.py                            # Lightweight app helpers
+│
+├── src/
+│   ├── agent/
+│   │   ├── agent.py                      # LLM function-calling UI agent
+│   │   └── visual_verifier.py            # Render-based visual verifier
+│   ├── blender/
+│   │   └── client.py                     # UI-side Blender client
+│   └── llm/                              # Provider adapters
+│
+├── ui/
+│   ├── main.py                           # Gradio UI entry point
+│   ├── components/                       # Chat and layout components
+│   ├── utils/                            # Chat, LLM, and Blender helpers
+│   └── assets/                           # UI avatars and images
 │
 ├── generation_scripts/
-│   └── generated asset scripts
+│   ├── asset_*.py
+│   └── Scene_*/asset_*.py                # Reproducible generated-asset scripts
 │
-├── renders/
-│   └── preview renders
+├── data/
+│   ├── aimlapi_samples/                  # Streaming/function-call samples
+│   ├── stream_samples/
+│   └── stream_parser.py
+│
+├── docs/
+│   └── ARCHITECTURE.md
+│
+├── doc/
+│   └── API.md
 │
 ├── scripts/
 │   ├── start_blender_agent.sh
 │   └── start_ui.sh
 │
-├── config.json
-├── requirements.txt
-└── README.md
+├── tests/
+│   └── test_visual_verifier.py
+│
+├── third_party/
+│   └── infinigen/                        # Vendored Infinigen dependency
+│
+├── pic_readme/                           # README images and videos
+├── asserts/                              # UI screenshots/icons
+└── addon.py                              # Addon convenience entry point
 ```
 
 ---
