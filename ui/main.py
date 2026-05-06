@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-GOSIM HACKATHON BlenderCode3D UI主入口
+GOSIM HACKATHON SCRIPT3D UI主入口
 
 UI组件说明：
 1. 连接步骤区域 - 分为两行的布局设计
@@ -1235,11 +1235,11 @@ def create_ui():
     globals.session_id = session_id
 
     with gr.Blocks(
-        title="GOSIM HACKATHON ● BlenderCode3D",
+        title="GOSIM HACKATHON ● SCRIPT3D",
         css=CUSTOM_CSS,
         elem_id="agent-shell",
     ) as app:
-        gr.Markdown("## GOSIM HACKATHON ● BlenderCode3D", elem_classes=["app-title"])
+        gr.Markdown("## GOSIM HACKATHON ● SCRIPT3D", elem_classes=["app-title"])
 
         create_chat_tab(session_id)
 
