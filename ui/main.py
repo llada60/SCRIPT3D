@@ -72,7 +72,7 @@ body {
     color: var(--gosim-text);
 }
 
-#gosim-shell {
+#agent-shell {
     max-width: 1680px;
     height: 100%;
     min-height: 0;
@@ -102,7 +102,7 @@ body {
 
 .app-subtitle {
     margin-top: 8px !important;
-    color: var(--gosim-muted);
+    color: var(--agent-muted);
     font-size: 14px;
 }
 
@@ -327,8 +327,8 @@ body {
     background: transparent !important;
 }
 
-.gosim-chatbot,
-.gosim-chatbot * {
+.agent-chatbot,
+.agent-chatbot * {
     box-sizing: border-box;
 }
 
@@ -690,15 +690,15 @@ padding-bottom 用来给底部输入框预留空间，避免最后一条消息�
     box-shadow: none !important;
 }
 
-.gosim-chatbot p,
-.gosim-chatbot span,
-.gosim-chatbot pre,
-.gosim-chatbot code {
+.agent-chatbot p,
+.agent-chatbot span,
+.agent-chatbot pre,
+.agent-chatbot code {
     color: inherit;
 }
 
-.gosim-chatbot pre,
-.gosim-chatbot code {
+.agent-chatbot pre,
+.agent-chatbot code {
     max-width: 100%;
     overflow-x: auto;
     white-space: pre-wrap;
@@ -706,11 +706,11 @@ padding-bottom 用来给底部输入框预留空间，避免最后一条消息�
     background: rgba(0, 0, 0, 0.18) !important;
 }
 
-.gosim-chatbot details.tool-result-details {
+.agent-chatbot details.tool-result-details {
     margin-top: 10px;
 }
 
-.gosim-chatbot details.tool-result-details summary {
+.agent-chatbot details.tool-result-details summary {
     display: inline-flex;
     align-items: center;
     min-height: 30px;
@@ -740,9 +740,9 @@ padding-bottom 用来给底部输入框预留空间，避免最后一条消息�
 .gradio-container input,
 .gradio-container textarea,
 .gradio-container select {
-    border-color: var(--gosim-border) !important;
+    border-color: var(--agent-border) !important;
     background: #121414 !important;
-    color: var(--gosim-text) !important;
+    color: var(--agent-text) !important;
 }
 
 .gradio-container input[type="checkbox"] {
@@ -810,7 +810,7 @@ padding-bottom 用来给底部输入框预留空间，避免最后一条消息�
 
 .gradio-container button.secondary,
 .gradio-container button[variant="secondary"] {
-    border-color: var(--gosim-border) !important;
+    border-color: var(--agent-border) !important;
     background: #242724 !important;
     color: #edf2f8 !important;
 }
@@ -976,12 +976,12 @@ html,
         min-width: 0;
     }
 
-    .gosim-chatbot .ant-bubble-content,
-    .gosim-chatbot [class*="bubble-content"],
-    .gosim-chatbot [class*="Bubble-content"],
-    .gosim-chatbot [class*="message-content"],
-    .gosim-chatbot [class*="Message-content"],
-    .gosim-chatbot [data-role] {
+    .agent-chatbot .ant-bubble-content,
+    .agent-chatbot [class*="bubble-content"],
+    .agent-chatbot [class*="Bubble-content"],
+    .agent-chatbot [class*="message-content"],
+    .agent-chatbot [class*="Message-content"],
+    .agent-chatbot [data-role] {
         max-width: 92%;
     }
 
@@ -1004,7 +1004,7 @@ html,
         padding: 14px;
     }
 
-    .gosim-chatbot {
+    .agent-chatbot {
         min-height: 340px;
     }
 }
@@ -1237,7 +1237,7 @@ def create_ui():
     with gr.Blocks(
         title="GOSIM HACKATHON ● BlenderCode3D",
         css=CUSTOM_CSS,
-        elem_id="gosim-shell",
+        elem_id="agent-shell",
     ) as app:
         gr.Markdown("## GOSIM HACKATHON ● BlenderCode3D", elem_classes=["app-title"])
 

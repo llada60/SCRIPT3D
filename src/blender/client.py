@@ -1,5 +1,5 @@
 """
-Blender MCP client adapted from LLM-Blender-Agent for GOSIM/Infinigen.
+Blender MCP client adapted from LLM-Blender-Agent for Infinigen.
 
 The public class name and UI-facing response shape are kept compatible with the
 original project. The command set now targets the Infinigen-aware Blender addon
@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 class BlenderClient:
-    """Stateless JSON socket client for the GOSIM Blender addon."""
+    """Stateless JSON socket client for the Infinigen Agent Blender addon."""
 
     def __init__(self, host: str = "localhost", port: int = 9876):
         self.host = host

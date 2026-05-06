@@ -427,7 +427,7 @@ class RulePlanner:
 def make_planner() -> Any:
     import os
 
-    if os.getenv("GOSIM_PLANNER", "").lower() == "llm":
+    if os.getenv("INFINIGEN_AGENT_PLANNER", "").lower() == "llm":
         from .llm_planner import OpenAICompatiblePlanner
 
         return OpenAICompatiblePlanner()

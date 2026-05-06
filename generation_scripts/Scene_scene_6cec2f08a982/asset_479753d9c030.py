@@ -5,10 +5,11 @@ Run inside Blender with the Infinigen addon loaded if you want to replay it.
 import json
 
 GENERATION = {
-  "asset_id": "asset_463fb5765d09",
-  "category": "lamp",
-  "factory_path": "infinigen.assets.objects.lamp.DeskLampFactory",
-  "seed": 42,
+  "object_id": "asset_479753d9c030",
+  "asset_id": "asset_479753d9c030",
+  "category": "table",
+  "factory_path": "infinigen.assets.objects.tables.TableDiningFactory",
+  "seed": 0,
   "scale": 1.0,
   "location": [
     0.0,
@@ -16,7 +17,8 @@ GENERATION = {
     0.0
   ],
   "material_color": null,
-  "source_prompt": null
+  "source_prompt": null,
+  "scene": "Scene_scene_6cec2f08a982"
 }
 
 def replay(client):

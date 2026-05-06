@@ -1,9 +1,9 @@
 bl_info = {
-    "name": "GOSIM Infinigen Agent",
-    "author": "GOSIM Hackathon",
+    "name": "Infinigen Agent",
+    "author": "Infinigen Agent",
     "version": (0, 1, 0),
     "blender": (4, 2, 0),
-    "location": "View3D > Sidebar > GOSIM",
+    "location": "View3D > Sidebar > INFINIGEN_AGENT",
     "description": "Socket bridge for natural-language editing of Infinigen scenes.",
     "category": "3D View",
 }
@@ -27,8 +27,8 @@ import bpy
 from mathutils import Euler, Vector
 
 
-HOST = os.getenv("GOSIM_BLENDER_HOST", "127.0.0.1")
-PORT = int(os.getenv("GOSIM_BLENDER_PORT", "9876"))
+HOST = os.getenv("INFINIGEN_AGENT_BLENDER_HOST", "127.0.0.1")
+PORT = int(os.getenv("INFINIGEN_AGENT_BLENDER_PORT", "9876"))
 REQUEST_QUEUE: queue.Queue[tuple[dict[str, Any], threading.Event, dict[str, Any]]] = queue.Queue()
 SERVER: socketserver.ThreadingTCPServer | None = None
 SERVER_THREAD: threading.Thread | None = None
@@ -403,10 +403,10 @@ def _sync_scene_agent_status() -> None:
     if scene is None:
         return
     try:
-        scene.gosim_agent_state = str(AGENT_STATUS.get("state", "idle"))
-        scene.gosim_agent_message = str(AGENT_STATUS.get("message", ""))
-        scene.gosim_agent_operation = str(AGENT_STATUS.get("operation", ""))
-        scene.gosim_agent_cancel_requested = bool(AGENT_STATUS.get("cancel_requested", False))
+        scene.agent_state = str(AGENT_STATUS.get("state", "idle"))
+        scene.agent_message = str(AGENT_STATUS.get("message", ""))
+        scene.agent_operation = str(AGENT_STATUS.get("operation", ""))
+        scene.agent_cancel_requested = bool(AGENT_STATUS.get("cancel_requested", False))
     except Exception:
         pass
 
@@ -502,7 +502,7 @@ def start_server() -> dict[str, Any]:
         bpy.app.timers.register(_process_queue, persistent=True)
         TIMER_REGISTERED = True
 
-    print(f"[GOSIM] Blender agent server listening on {HOST}:{PORT}")
+    print(f"[InfinigenAgent] Blender agent server listening on {HOST}:{PORT}")
     return {"host": HOST, "port": PORT, "status": "running"}
 
 
@@ -518,16 +518,16 @@ def stop_server() -> dict[str, Any]:
 
 
 def _ensure_id(obj: bpy.types.Object, prefix: str = "obj") -> str:
-    if not obj.get("gosim_object_id"):
-        obj["gosim_object_id"] = f"{prefix}_{uuid.uuid4().hex[:12]}"
-    return str(obj["gosim_object_id"])
+    if not obj.get("agent_object_id"):
+        obj["agent_object_id"] = f"{prefix}_{uuid.uuid4().hex[:12]}"
+    return str(obj["agent_object_id"])
 
 
 def _ensure_asset_id(obj: bpy.types.Object) -> str:
-    if obj.get("gosim_asset_id"):
-        return str(obj["gosim_asset_id"])
-    obj["gosim_asset_id"] = f"asset_{uuid.uuid4().hex[:12]}"
-    return str(obj["gosim_asset_id"])
+    if obj.get("agent_asset_id"):
+        return str(obj["agent_asset_id"])
+    obj["agent_asset_id"] = f"asset_{uuid.uuid4().hex[:12]}"
+    return str(obj["agent_asset_id"])
 
 
 def _world_corners(obj: bpy.types.Object) -> list[Vector]:
@@ -583,10 +583,10 @@ def _scene_generation_folder_name() -> str:
         return _safe_path_component(f"{blend_name}_{scene_name}", "scene")
 
     scene = bpy.context.scene
-    if not scene.get("gosim_scene_id"):
-        scene["gosim_scene_id"] = f"scene_{uuid.uuid4().hex[:12]}"
+    if not scene.get("agent_scene_id"):
+        scene["agent_scene_id"] = f"scene_{uuid.uuid4().hex[:12]}"
     scene_name = _safe_path_component(scene.name, "scene")
-    scene_id = _safe_path_component(str(scene["gosim_scene_id"]), "scene")
+    scene_id = _safe_path_component(str(scene["agent_scene_id"]), "scene")
     return f"{scene_name}_{scene_id}"
 
 
@@ -627,8 +627,8 @@ def _generation_script_text(
         "scene": scene_folder,
     }
     return (
-        '"""Reproducible generation record for a GOSIM/Infinigen asset.\n'
-        "Run inside Blender with the GOSIM addon loaded if you want to replay it.\n"
+        '"""Reproducible generation record for a Infinigen asset.\n'
+        "Run inside Blender with the Infinigen addon loaded if you want to replay it.\n"
         '"""\n\n'
         "import json\n\n"
         f"GENERATION = {json.dumps(payload, ensure_ascii=False, indent=2)}\n\n"
@@ -729,10 +729,10 @@ def _category_from_asset_request(request: str, factory_path: str) -> str:
 
 
 def _category_for_group(root: bpy.types.Object, objects: list[bpy.types.Object]) -> str:
-    explicit = root.get("gosim_category")
+    explicit = root.get("agent_category")
     if explicit:
         return str(explicit)
-    factory = root.get("gosim_factory", "")
+    factory = root.get("agent_factory", "")
     names = " ".join([root.name, str(factory), *[obj.name for obj in objects[:8]]])
     return _category_from_text(names, root.type)
 
@@ -748,9 +748,9 @@ def _material_names(objects: list[bpy.types.Object]) -> list[str]:
 
 
 def _asset_root_for_existing(obj: bpy.types.Object) -> bpy.types.Object:
-    if obj.get("gosim_asset_id"):
+    if obj.get("agent_asset_id"):
         current = obj
-        while current.parent and current.parent.get("gosim_asset_id") == obj.get("gosim_asset_id"):
+        while current.parent and current.parent.get("agent_asset_id") == obj.get("agent_asset_id"):
             current = current.parent
         return current
     return obj
@@ -771,7 +771,7 @@ def _build_groups() -> dict[str, dict[str, Any]]:
         if obj.name.startswith("__"):
             continue
         _ensure_id(obj)
-        asset_id = obj.get("gosim_asset_id")
+        asset_id = obj.get("agent_asset_id")
         if asset_id:
             group_id = str(asset_id)
             root = _asset_root_for_existing(obj)
@@ -817,7 +817,7 @@ def _build_scene_index(save_path: str | None = None) -> dict[str, Any]:
             "root_name": root.name,
             "name": root.name,
             "category": category,
-            "factory": root.get("gosim_factory"),
+            "factory": root.get("agent_factory"),
             "object_names": [obj.name for obj in objects],
             "type": root.type,
             "location": [float(v) for v in root.location],
@@ -829,10 +829,10 @@ def _build_scene_index(save_path: str | None = None) -> dict[str, Any]:
             "dimensions": _dimensions_from_bbox(bbox_min, bbox_max),
             "materials": materials,
             "generation": {
-                "script_path": root.get("gosim_generation_script"),
-                "seed": root.get("gosim_seed"),
-                "source_prompt": root.get("gosim_source_prompt"),
-                "edit_prompt": root.get("gosim_edit_prompt"),
+                "script_path": root.get("agent_generation_script"),
+                "seed": root.get("agent_seed"),
+                "source_prompt": root.get("agent_source_prompt"),
+                "edit_prompt": root.get("agent_edit_prompt"),
             },
             "description": "",
             "relations": {"near": [], "on_top_of": None, "supports": [], "nearest": None, "nearest_wall": None},
@@ -880,7 +880,7 @@ def _build_scene_index(save_path: str | None = None) -> dict[str, Any]:
 
     if save_path is None:
         base = Path(bpy.data.filepath).parent if bpy.data.filepath else Path.cwd()
-        save_path = str(base / "gosim_scene_index.json")
+        save_path = str(base / "scene_index.json")
     Path(save_path).parent.mkdir(parents=True, exist_ok=True)
     Path(save_path).write_text(json.dumps(index, ensure_ascii=False, indent=2, default=_json_default))
     index["save_path"] = save_path
@@ -1042,7 +1042,7 @@ def _support_surface_candidates(asset: dict[str, Any]) -> list[dict[str, Any]]:
                 bucket["max_y"] = max(bucket["max_y"], max(ys))
                 bucket["z"] = max(bucket["z"], max(zs))
         except Exception as exc:
-            print(f"[GOSIM] Support surface scan skipped {obj.name}: {exc}")
+            print(f"[InfinigenAgent] Support surface scan skipped {obj.name}: {exc}")
         finally:
             if mesh is not None:
                 eval_obj.to_mesh_clear()
@@ -1250,7 +1250,7 @@ def _make_material(color: str | None, material_name: str | None) -> bpy.types.Ma
         rgba = COLOR_MAP.get(color_text.lower(), COLOR_MAP.get(color_text, (0.8, 0.8, 0.8, 1.0)))
         if color_text.startswith("#") and len(color_text) in {7, 9}:
             rgba = tuple(int(color_text[i : i + 2], 16) / 255 for i in (1, 3, 5)) + (1.0,)
-    name = material_name or f"GOSIM_{color or 'material'}"
+    name = material_name or f"Agent_{color or 'material'}"
     mat = bpy.data.materials.get(name) or bpy.data.materials.new(name)
     mat.use_nodes = True
     node = mat.node_tree.nodes.get("Principled BSDF")
@@ -1291,7 +1291,7 @@ def _generate_prompt_material(material: str | None, material_name: str | None = 
     elif callable(material_obj):
         generated = material_obj()
     if isinstance(generated, bpy.types.Material):
-        generated.name = material_name or f"GOSIM_{str(material or 'material')}"
+        generated.name = material_name or f"Agent_{str(material or 'material')}"
         return generated
     return None
 
@@ -1333,7 +1333,7 @@ def _color_from_prompt(prompt: str, explicit: str | None = None) -> str | None:
 
 def _ensure_infinigen_on_path() -> Path:
     candidates = [
-        os.getenv("GOSIM_INFINIGEN_ROOT"),
+        os.getenv("INFINIGEN_AGENT_INFINIGEN_ROOT"),
         os.getenv("INFINIGEN_ROOT"),
         str(Path(__file__).resolve().parents[1] / "third_party" / "infinigen"),
         str(Path(__file__).resolve().parents[2] / "third_party" / "infinigen"),
@@ -1344,13 +1344,13 @@ def _ensure_infinigen_on_path() -> Path:
             if str(root) not in sys.path:
                 sys.path.insert(0, str(root))
             return root
-    raise RuntimeError("Could not locate Infinigen root. Set GOSIM_INFINIGEN_ROOT.")
+    raise RuntimeError("Could not locate Infinigen root. Set INFINIGEN_AGENT_INFINIGEN_ROOT.")
 
 
 def _candidate_python_dependency_paths() -> list[Path]:
     candidates: list[Path] = []
 
-    for env_name in ("GOSIM_PYTHON_SITE_PACKAGES", "PYTHONPATH"):
+    for env_name in ("INFINIGEN_AGENT_PYTHON_SITE_PACKAGES", "PYTHONPATH"):
         for raw_path in os.getenv(env_name, "").split(os.pathsep):
             if raw_path:
                 candidates.append(Path(raw_path).expanduser())
@@ -1410,7 +1410,7 @@ def _ensure_python_module(module_name: str, package_name: str | None = None) -> 
             sys.path.insert(0, str(path))
         try:
             importlib.import_module(module_name)
-            print(f"[GOSIM] Loaded Python dependency '{module_name}' from {path}")
+            print(f"[InfinigenAgent] Loaded Python dependency '{module_name}' from {path}")
             return
         except ModuleNotFoundError as exc:
             if exc.name != module_name:
@@ -1420,7 +1420,7 @@ def _ensure_python_module(module_name: str, package_name: str | None = None) -> 
     raise ModuleNotFoundError(
         f"Missing Python module '{module_name}'. Install '{package}' into the Python "
         "environment used by scripts/start_blender_agent.sh, or set "
-        "GOSIM_PYTHON_SITE_PACKAGES to a site-packages directory visible to Blender."
+        "INFINIGEN_AGENT_PYTHON_SITE_PACKAGES to a site-packages directory visible to Blender."
     )
 
 
@@ -1440,7 +1440,7 @@ def _configure_infinigen_once() -> None:
             skip_unknown=True,
         )
     except Exception as exc:
-        print(f"[GOSIM] Infinigen gin configuration warning: {exc}")
+        print(f"[InfinigenAgent] Infinigen gin configuration warning: {exc}")
     INFINIGEN_CONFIGURED = True
 
 
@@ -1472,10 +1472,10 @@ def _tag_asset_objects(root_objects: list[bpy.types.Object], category: str, fact
         for obj in [root, *list(root.children_recursive)]:
             if not isinstance(obj, bpy.types.Object):
                 continue
-            obj["gosim_asset_id"] = asset_id
-            obj["gosim_object_id"] = obj.get("gosim_object_id") or f"obj_{uuid.uuid4().hex[:12]}"
-            obj["gosim_category"] = category
-            obj["gosim_factory"] = factory_path
+            obj["agent_asset_id"] = asset_id
+            obj["agent_object_id"] = obj.get("agent_object_id") or f"obj_{uuid.uuid4().hex[:12]}"
+            obj["agent_category"] = category
+            obj["agent_factory"] = factory_path
     return asset_id
 
 
@@ -1488,12 +1488,12 @@ def _set_asset_metadata(
     generation_script: str,
 ) -> None:
     for obj in _objects_for_asset(asset):
-        obj["gosim_seed"] = seed
+        obj["agent_seed"] = seed
         if source_prompt:
-            obj["gosim_source_prompt"] = source_prompt
+            obj["agent_source_prompt"] = source_prompt
         if edit_prompt:
-            obj["gosim_edit_prompt"] = edit_prompt
-        obj["gosim_generation_script"] = generation_script
+            obj["agent_edit_prompt"] = edit_prompt
+        obj["agent_generation_script"] = generation_script
 
 
 def _spawn_infinigen_asset(
@@ -1626,9 +1626,9 @@ def cmd_get_scene_info(_payload: dict[str, Any]) -> dict[str, Any]:
                 "location": [float(v) for v in obj.location],
                 "rotation": [float(v) for v in obj.rotation_euler],
                 "scale": [float(v) for v in obj.scale],
-                "category": obj.get("gosim_category"),
-                "object_id": obj.get("gosim_object_id"),
-                "asset_id": obj.get("gosim_asset_id"),
+                "category": obj.get("agent_category"),
+                "object_id": obj.get("agent_object_id"),
+                "asset_id": obj.get("agent_asset_id"),
             }
         )
     return {
@@ -1661,7 +1661,7 @@ def cmd_open_blend(payload: dict[str, Any]) -> dict[str, Any]:
 def cmd_save_blend(payload: dict[str, Any]) -> dict[str, Any]:
     path = payload.get("path") or bpy.data.filepath
     if not path:
-        path = str(Path.cwd() / "gosim_scene.blend")
+        path = str(Path.cwd() / "scene.blend")
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(path))
     return {"path": str(path), "message": "Saved blend file"}
@@ -2033,7 +2033,7 @@ def _resolve_light(ref: str | None = None) -> bpy.types.Object:
     if ref:
         lowered = str(ref).lower()
         for light in lights:
-            if lowered in light.name.lower() or lowered == str(light.get("gosim_object_id", "")).lower():
+            if lowered in light.name.lower() or lowered == str(light.get("agent_object_id", "")).lower():
                 return light
     active = bpy.context.view_layer.objects.active
     if active and active.type == "LIGHT" and active in lights:
@@ -2293,7 +2293,7 @@ def cmd_adjust_camera_from_render(payload: dict[str, Any]) -> dict[str, Any]:
             break
 
     if mask_error and not steps:
-        print(f"[GOSIM] Camera agent warning: {mask_error}; rendering without mask-based refinement")
+        print(f"[InfinigenAgent] Camera agent warning: {mask_error}; rendering without mask-based refinement")
 
     render_result = cmd_render_scene(
         {
@@ -2358,7 +2358,7 @@ def cmd_render_scene(payload: dict[str, Any]) -> dict[str, Any]:
                     if quality_after_step.get("good"):
                         break
                 if mask_error:
-                    print(f"[GOSIM] Camera auto-adjust warning: {mask_error}; continuing render")
+                    print(f"[InfinigenAgent] Camera auto-adjust warning: {mask_error}; continuing render")
                 camera_adjustment = {
                     "adjusted": True,
                     "before": quality,
@@ -2409,26 +2409,26 @@ COMMANDS = {
 }
 
 
-class GOSIM_OT_start_server(bpy.types.Operator):
-    bl_idname = "gosim.start_server"
-    bl_label = "Start GOSIM Agent Server"
+class INFINIGEN_AGENT_OT_start_server(bpy.types.Operator):
+    bl_idname = "infinigen_agent.start_server"
+    bl_label = "Start Infinigen Agent Server"
 
     def execute(self, _context: bpy.types.Context) -> set[str]:
         start_server()
         return {"FINISHED"}
 
 
-class GOSIM_OT_stop_server(bpy.types.Operator):
-    bl_idname = "gosim.stop_server"
-    bl_label = "Stop GOSIM Agent Server"
+class INFINIGEN_AGENT_OT_stop_server(bpy.types.Operator):
+    bl_idname = "infinigen_agent.stop_server"
+    bl_label = "Stop Infinigen Agent Server"
 
     def execute(self, _context: bpy.types.Context) -> set[str]:
         stop_server()
         return {"FINISHED"}
 
 
-class GOSIM_OT_rebuild_index(bpy.types.Operator):
-    bl_idname = "gosim.rebuild_index"
+class INFINIGEN_AGENT_OT_rebuild_index(bpy.types.Operator):
+    bl_idname = "infinigen_agent.rebuild_index"
     bl_label = "Rebuild Scene Index"
 
     def execute(self, _context: bpy.types.Context) -> set[str]:
@@ -2437,8 +2437,8 @@ class GOSIM_OT_rebuild_index(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class GOSIM_OT_cancel_agent_run(bpy.types.Operator):
-    bl_idname = "gosim.cancel_agent_run"
+class INFINIGEN_AGENT_OT_cancel_agent_run(bpy.types.Operator):
+    bl_idname = "infinigen_agent.cancel_agent_run"
     bl_label = "Stop Agent Run"
     bl_description = "Request the UI/agent loop to stop at the next cancellation check"
 
@@ -2448,28 +2448,28 @@ class GOSIM_OT_cancel_agent_run(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class GOSIM_PT_panel(bpy.types.Panel):
-    bl_label = "GOSIM Agent"
-    bl_idname = "GOSIM_PT_panel"
+class INFINIGEN_AGENT_PT_panel(bpy.types.Panel):
+    bl_label = "Infinigen Agent"
+    bl_idname = "INFINIGEN_AGENT_PT_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "GOSIM"
+    bl_category = "Infinigen"
 
     def draw(self, context: bpy.types.Context) -> None:
         layout = self.layout
         layout.label(text=f"Socket: {HOST}:{PORT}")
         layout.label(text=f"Server: {'running' if SERVER else 'stopped'}")
-        layout.operator("gosim.start_server")
-        layout.operator("gosim.stop_server")
+        layout.operator("infinigen_agent.start_server")
+        layout.operator("infinigen_agent.stop_server")
 
         layout.separator()
         _sync_scene_agent_status()
-        state = getattr(context.scene, "gosim_agent_state", AGENT_STATUS.get("state", "idle"))
-        message = getattr(context.scene, "gosim_agent_message", AGENT_STATUS.get("message", ""))
-        operation = getattr(context.scene, "gosim_agent_operation", AGENT_STATUS.get("operation", ""))
+        state = getattr(context.scene, "agent_state", AGENT_STATUS.get("state", "idle"))
+        message = getattr(context.scene, "agent_message", AGENT_STATUS.get("message", ""))
+        operation = getattr(context.scene, "agent_operation", AGENT_STATUS.get("operation", ""))
         cancel_requested = getattr(
             context.scene,
-            "gosim_agent_cancel_requested",
+            "agent_cancel_requested",
             AGENT_STATUS.get("cancel_requested", False),
         )
         layout.label(text=f"Agent: {state}")
@@ -2479,40 +2479,40 @@ class GOSIM_PT_panel(bpy.types.Panel):
             layout.label(text=message)
         cancel_row = layout.row()
         cancel_row.enabled = state in {"running", "cancelling"} and not cancel_requested
-        cancel_row.operator("gosim.cancel_agent_run", icon="CANCEL")
+        cancel_row.operator("infinigen_agent.cancel_agent_run", icon="CANCEL")
 
         layout.separator()
-        layout.operator("gosim.rebuild_index")
+        layout.operator("infinigen_agent.rebuild_index")
 
 
 CLASSES = (
-    GOSIM_OT_start_server,
-    GOSIM_OT_stop_server,
-    GOSIM_OT_rebuild_index,
-    GOSIM_OT_cancel_agent_run,
-    GOSIM_PT_panel,
+    INFINIGEN_AGENT_OT_start_server,
+    INFINIGEN_AGENT_OT_stop_server,
+    INFINIGEN_AGENT_OT_rebuild_index,
+    INFINIGEN_AGENT_OT_cancel_agent_run,
+    INFINIGEN_AGENT_PT_panel,
 )
 
 
 def register() -> None:
     for cls in CLASSES:
         bpy.utils.register_class(cls)
-    bpy.types.Scene.gosim_agent_state = bpy.props.StringProperty(default="idle")
-    bpy.types.Scene.gosim_agent_message = bpy.props.StringProperty(default="Agent 空闲")
-    bpy.types.Scene.gosim_agent_operation = bpy.props.StringProperty(default="")
-    bpy.types.Scene.gosim_agent_cancel_requested = bpy.props.BoolProperty(default=False)
+    bpy.types.Scene.agent_state = bpy.props.StringProperty(default="idle")
+    bpy.types.Scene.agent_message = bpy.props.StringProperty(default="Agent 空闲")
+    bpy.types.Scene.agent_operation = bpy.props.StringProperty(default="")
+    bpy.types.Scene.agent_cancel_requested = bpy.props.BoolProperty(default=False)
     _sync_scene_agent_status()
-    if os.getenv("GOSIM_NO_AUTOSTART") != "1":
+    if os.getenv("INFINIGEN_AGENT_NO_AUTOSTART") != "1":
         start_server()
 
 
 def unregister() -> None:
     stop_server()
     for attr in (
-        "gosim_agent_state",
-        "gosim_agent_message",
-        "gosim_agent_operation",
-        "gosim_agent_cancel_requested",
+        "agent_state",
+        "agent_message",
+        "agent_operation",
+        "agent_cancel_requested",
     ):
         if hasattr(bpy.types.Scene, attr):
             delattr(bpy.types.Scene, attr)

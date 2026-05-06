@@ -64,12 +64,12 @@ When the explicit request is complete, stop planning extra actions.
 
 class OpenAICompatiblePlanner:
     def __init__(self) -> None:
-        self.base_url = os.environ.get("GOSIM_LLM_BASE_URL", "").rstrip("/")
-        self.api_key = os.environ.get("GOSIM_LLM_API_KEY", "")
-        self.model = os.environ.get("GOSIM_LLM_MODEL", "")
+        self.base_url = os.environ.get("INFINIGEN_AGENT_LLM_BASE_URL", "").rstrip("/")
+        self.api_key = os.environ.get("INFINIGEN_AGENT_LLM_API_KEY", "")
+        self.model = os.environ.get("INFINIGEN_AGENT_LLM_MODEL", "")
         self.fallback = RulePlanner()
         if not self.base_url or not self.api_key or not self.model:
-            raise ValueError("Set GOSIM_LLM_BASE_URL, GOSIM_LLM_API_KEY and GOSIM_LLM_MODEL")
+            raise ValueError("Set INFINIGEN_AGENT_LLM_BASE_URL, INFINIGEN_AGENT_LLM_API_KEY and INFINIGEN_AGENT_LLM_MODEL")
 
     def plan(self, text: str) -> list[Action]:
         try:

@@ -1,4 +1,4 @@
-# GOSIM Blender Agent API
+# Infinigen Blender Agent API
 
 The socket protocol remains compatible with LLM-Blender-Agent:
 

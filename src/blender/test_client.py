@@ -1,4 +1,4 @@
-"""Small smoke test for the GOSIM Blender socket client."""
+"""Small smoke test for the Infinigen Agent Blender socket client."""
 
 from __future__ import annotations
 

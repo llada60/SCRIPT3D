@@ -1,4 +1,4 @@
-"""Client for the GOSIM Blender addon socket server."""
+"""Client for the Infinigen Agent Blender addon socket server."""
 
 from __future__ import annotations
 

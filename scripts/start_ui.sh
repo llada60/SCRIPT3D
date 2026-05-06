@@ -4,11 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-export GOSIM_INFINIGEN_ROOT="${GOSIM_INFINIGEN_ROOT:-$ROOT/third_party/infinigen}"
-export GOSIM_BLENDER_HOST="${GOSIM_BLENDER_HOST:-127.0.0.1}"
-export GOSIM_BLENDER_PORT="${GOSIM_BLENDER_PORT:-9876}"
+export INFINIGEN_AGENT_INFINIGEN_ROOT="${INFINIGEN_AGENT_INFINIGEN_ROOT:-$ROOT/third_party/infinigen}"
+export INFINIGEN_AGENT_BLENDER_HOST="${INFINIGEN_AGENT_BLENDER_HOST:-127.0.0.1}"
+export INFINIGEN_AGENT_BLENDER_PORT="${INFINIGEN_AGENT_BLENDER_PORT:-9876}"
 
-PYTHON_BIN="${GOSIM_PYTHON:-}"
+PYTHON_BIN="${INFINIGEN_AGENT_PYTHON:-}"
 if [[ -z "$PYTHON_BIN" && -x "/opt/miniconda3/envs/infinigen/bin/python" ]]; then
   PYTHON_BIN="/opt/miniconda3/envs/infinigen/bin/python"
 fi

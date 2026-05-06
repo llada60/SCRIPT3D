@@ -1,4 +1,4 @@
-"""Command-line interface for the GOSIM Blender agent."""
+"""Command-line interface for the Infinigen Blender agent."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .agent import GosimAgent
+from .agent import InfinigenAgent
 from .client import BlenderClient
 from .config import get_settings
 from .infinigen_runner import InfinigenRunner
@@ -37,7 +37,7 @@ def main() -> None:
     if args.command == "ping":
         print(json.dumps(client.ping(), ensure_ascii=False, indent=2))
     elif args.command == "chat":
-        result = GosimAgent(client).handle(args.text)
+        result = InfinigenAgent(client).handle(args.text)
         print(result.text)
         if result.preview_path:
             print(result.preview_path)
@@ -60,4 +60,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
